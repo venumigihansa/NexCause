@@ -1,0 +1,92 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AppSourceType {
+  image
+  git
+}
+
+enum DeploymentStatus {
+  creating
+  running
+  failed
+  stopped
+  deleted
+}
+
+enum BuildStatus {
+  pending
+  running
+  succeeded
+  failed
+  skipped
+}
+
+enum RuntimeConfigType {
+  env
+  secret
+  file
+}
+
+model App {
+  id           String        @id @default(cuid())
+  name         String        @unique
+  displayName  String
+  sourceType   AppSourceType @default(image)
+  image        String?
+  defaultPort  Int?
+  deployments  Deployment[]
+  builds       Build[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Deployment {
+  id                    String             @id @default(cuid())
+  appId                 String
+  app                   App                @relation(fields: [appId], references: [id], onDelete: Cascade)
+  namespace             String
+  image                 String
+  replicas              Int
+  port                  Int
+  status                DeploymentStatus   @default(creating)
+  kubernetesDeployment  String
+  kubernetesService     String
+  kubernetesConfigMap   String?
+  runtimeConfigs        RuntimeConfig[]
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  @@index([appId])
+  @@index([namespace])
+}
+
+model RuntimeConfig {
+  id            String            @id @default(cuid())
+  deploymentId  String
+  deployment    Deployment        @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  type          RuntimeConfigType
+  data          Json
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([deploymentId])
+}
+
+model Build {
+  id         String      @id @default(cuid())
+  appId      String
+  app        App         @relation(fields: [appId], references: [id], onDelete: Cascade)
+  status     BuildStatus @default(pending)
+  image      String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([appId])
+}
