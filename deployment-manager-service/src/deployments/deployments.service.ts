@@ -26,6 +26,7 @@ export class DeploymentsService {
     private readonly prisma: PrismaService,
   ) {}
 
+  // Creates a deployment record, then creates the matching Kubernetes resources.
   async create(appId: string, createDeploymentDto: CreateDeploymentDto) {
     const app = await this.appsService.findOneOrThrow(appId);
     const deploymentId = randomUUID();
@@ -99,6 +100,7 @@ export class DeploymentsService {
     return deployment;
   }
 
+  // Returns all deployments for an app after confirming the app exists.
   async findByApp(appId: string) {
     await this.appsService.findOneOrThrow(appId);
 
@@ -111,6 +113,7 @@ export class DeploymentsService {
     });
   }
 
+  // Reads live Kubernetes status and updates the stored status when ready.
   async getStatus(id: string) {
     const deployment = await this.findOneOrThrow(id);
 
@@ -147,6 +150,7 @@ export class DeploymentsService {
     };
   }
 
+  // Finds pods for a deployment by labels and returns their logs.
   async getLogs(id: string) {
     const deployment = await this.findOneOrThrow(id);
     const labels = this.kubernetesService.buildManagedLabels(
@@ -157,6 +161,7 @@ export class DeploymentsService {
     return this.kubernetesService.getDeploymentLogs(deployment.namespace, labels);
   }
 
+  // Removes Kubernetes resources and keeps the DB record as deleted history.
   async delete(id: string) {
     const deployment = await this.findOneOrThrow(id);
     const names = deploymentToResourceNames(deployment);
@@ -172,6 +177,7 @@ export class DeploymentsService {
     });
   }
 
+  // Loads one deployment from Postgres or throws a 404 for API callers.
   private async findOneOrThrow(id: string) {
     const deployment = await this.prisma.deployment.findUnique({
       where: { id },

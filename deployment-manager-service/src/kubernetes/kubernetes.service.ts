@@ -6,6 +6,7 @@ import { buildNamespaceManifest } from './builders/namespace-manifest.builder';
 import { buildServiceManifest } from './builders/service-manifest.builder';
 import { KubernetesResourceNames } from './types/kubernetes-resource-names';
 
+// Shape of the normalized data KubernetesService needs to create resources.
 interface DeployImageInput {
   namespace: string;
   names: KubernetesResourceNames;
@@ -29,6 +30,7 @@ export class KubernetesService {
     this.appsApi = kubeConfig.makeApiClient(k8s.AppsV1Api);
   }
 
+  // Creates deterministic Kubernetes resource names for one app deployment.
   buildResourceNames(appName: string, deploymentId: string): KubernetesResourceNames {
     const appSegment = toDnsSafeName(appName).slice(0, 32) || 'app';
     const deploymentSegment = deploymentId.slice(0, 8).toLowerCase();
@@ -41,6 +43,7 @@ export class KubernetesService {
     };
   }
 
+  // Creates labels used to connect Deployments, Pods, Services, and log lookups.
   buildManagedLabels(appId: string, deploymentId: string): Record<string, string> {
     return {
       'app.kubernetes.io/managed-by': 'deployment-manager-service',
@@ -49,6 +52,7 @@ export class KubernetesService {
     };
   }
 
+  // Creates or updates all Kubernetes resources needed to run an image.
   async deployImage(input: DeployImageInput): Promise<void> {
     await this.ensureNamespace(input.namespace);
     await this.upsertConfigMap(input);
@@ -56,6 +60,7 @@ export class KubernetesService {
     await this.upsertService(input);
   }
 
+  // Reads live Kubernetes Deployment readiness and replica counts.
   async getDeploymentStatus(namespace: string, deploymentName: string) {
     const deployment = await this.appsApi.readNamespacedDeployment(
       deploymentName,
@@ -74,6 +79,7 @@ export class KubernetesService {
     };
   }
 
+  // Finds pods by deployment labels and returns logs from each matching pod.
   async getDeploymentLogs(
     namespace: string,
     labels: Record<string, string>,
@@ -105,6 +111,7 @@ export class KubernetesService {
     );
   }
 
+  // Deletes the Kubernetes resources that were created for a deployment.
   async deleteDeploymentResources(
     namespace: string,
     names: KubernetesResourceNames,
@@ -120,6 +127,7 @@ export class KubernetesService {
     );
   }
 
+  // Creates the namespace only when it does not already exist.
   private async ensureNamespace(namespace: string): Promise<void> {
     try {
       await this.coreApi.readNamespace(namespace);
@@ -132,6 +140,7 @@ export class KubernetesService {
     }
   }
 
+  // Creates or replaces the ConfigMap that stores non-secret env vars.
   private async upsertConfigMap(input: DeployImageInput): Promise<void> {
     const configMap = buildConfigMapManifest({
       name: input.names.configMapName,
@@ -163,6 +172,7 @@ export class KubernetesService {
     }
   }
 
+  // Creates or replaces the Kubernetes Deployment that runs the container image.
   private async upsertDeployment(input: DeployImageInput): Promise<void> {
     const deployment = buildDeploymentManifest({
       name: input.names.deploymentName,
@@ -197,6 +207,7 @@ export class KubernetesService {
     }
   }
 
+  // Creates or replaces the ClusterIP Service that routes traffic to the pods.
   private async upsertService(input: DeployImageInput): Promise<void> {
     const service = buildServiceManifest({
       name: input.names.serviceName,
@@ -235,6 +246,7 @@ export class KubernetesService {
     }
   }
 
+  // Ignores 404 errors during cleanup, because missing resources are already gone.
   private async deleteIfExists(deleteResource: () => Promise<unknown>): Promise<void> {
     try {
       await deleteResource();
