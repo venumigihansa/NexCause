@@ -6,6 +6,10 @@ export class CreateDeploymentDto {
   image?: string;
 
   @IsOptional()
+  @IsString()
+  buildId?: string;
+
+  @IsOptional()
   @IsInt()
   @Min(1)
   port?: number;
@@ -18,6 +22,18 @@ export class CreateDeploymentDto {
   @IsOptional()
   @IsObject()
   env?: Record<string, string>;
+
+  @IsOptional()
+  @IsObject()
+  secrets?: Record<string, string>;
+
+  @IsOptional()
+  @IsObject()
+  files?: Record<string, string>;
+
+  @IsOptional()
+  @IsObject()
+  secretFiles?: Record<string, string>;
 
   @IsOptional()
   @IsString()

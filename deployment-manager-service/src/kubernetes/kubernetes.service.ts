@@ -1,8 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
+import { buildBuildJobManifest } from './builders/build-job-manifest.builder';
+import { buildBuildpackJobManifest } from './builders/buildpack-job-manifest.builder';
 import { buildConfigMapManifest } from './builders/configmap-manifest.builder';
 import { buildDeploymentManifest } from './builders/deployment-manifest.builder';
 import { buildNamespaceManifest } from './builders/namespace-manifest.builder';
+import { buildSecretManifest } from './builders/secret-manifest.builder';
 import { buildServiceManifest } from './builders/service-manifest.builder';
 import { KubernetesResourceNames } from './types/kubernetes-resource-names';
 
@@ -14,13 +17,49 @@ interface DeployImageInput {
   port: number;
   replicas: number;
   env: Record<string, string>;
+  secrets: Record<string, string>;
+  files: FileConfigMap;
+  secretFiles: FileConfigMap;
   labels: Record<string, string>;
+}
+
+interface FileConfigMap {
+  data: Record<string, string>;
+  items: Array<{
+    key: string;
+    path: string;
+  }>;
+}
+
+interface CreateBuildJobInput {
+  namespace: string;
+  jobName: string;
+  labels: Record<string, string>;
+  repoUrl: string;
+  branch: string;
+  buildContext: string;
+  dockerfilePath: string;
+  clusterImage: string;
+}
+
+interface CreateBuildpackJobInput {
+  namespace: string;
+  jobName: string;
+  labels: Record<string, string>;
+  repoUrl: string;
+  branch: string;
+  buildContext: string;
+  clusterImage: string;
+  builderImage: string;
+  runnerImage: string;
+  insecureRegistry: string;
 }
 
 @Injectable()
 export class KubernetesService {
   private readonly coreApi: k8s.CoreV1Api;
   private readonly appsApi: k8s.AppsV1Api;
+  private readonly batchApi: k8s.BatchV1Api;
 
   constructor() {
     const kubeConfig = new k8s.KubeConfig();
@@ -28,6 +67,7 @@ export class KubernetesService {
 
     this.coreApi = kubeConfig.makeApiClient(k8s.CoreV1Api);
     this.appsApi = kubeConfig.makeApiClient(k8s.AppsV1Api);
+    this.batchApi = kubeConfig.makeApiClient(k8s.BatchV1Api);
   }
 
   // Creates deterministic Kubernetes resource names for one app deployment.
@@ -40,6 +80,9 @@ export class KubernetesService {
       deploymentName: base,
       serviceName: `${base}-svc`,
       configMapName: `${base}-env`,
+      fileConfigMapName: `${base}-files`,
+      secretName: `${base}-secret`,
+      secretFileSecretName: `${base}-secret-files`,
     };
   }
 
@@ -52,12 +95,89 @@ export class KubernetesService {
     };
   }
 
+  // Creates deterministic names for Kubernetes build Jobs.
+  buildJobName(appName: string, buildId: string): string {
+    const appSegment = toDnsSafeName(appName).slice(0, 32) || 'app';
+    const buildSegment = buildId.slice(0, 8).toLowerCase();
+
+    return `${appSegment}-build-${buildSegment}`;
+  }
+
+  // Creates labels used to find build Jobs and their pods later.
+  buildJobLabels(appId: string, buildId: string): Record<string, string> {
+    return {
+      'app.kubernetes.io/managed-by': 'deployment-manager-service',
+      'rca-platform/app-id': appId,
+      'rca-platform/build-id': buildId,
+    };
+  }
+
   // Creates or updates all Kubernetes resources needed to run an image.
   async deployImage(input: DeployImageInput): Promise<void> {
     await this.ensureNamespace(input.namespace);
     await this.upsertConfigMap(input);
+    await this.upsertFileConfigMap(input);
+    await this.upsertSecret(input);
+    await this.upsertSecretFiles(input);
     await this.upsertDeployment(input);
     await this.upsertService(input);
+  }
+
+  // Creates a Kubernetes Job that clones a repo, builds a Dockerfile, and pushes the image.
+  async createBuildJob(input: CreateBuildJobInput): Promise<void> {
+    await this.ensureNamespace(input.namespace);
+
+    const job = buildBuildJobManifest({
+      name: input.jobName,
+      labels: input.labels,
+      repoUrl: input.repoUrl,
+      branch: input.branch,
+      buildContext: input.buildContext,
+      dockerfilePath: input.dockerfilePath,
+      clusterImage: input.clusterImage,
+    });
+
+    await this.batchApi.createNamespacedJob(input.namespace, job);
+  }
+
+  // Creates a Kubernetes Job that clones a repo and builds it with Cloud Native Buildpacks.
+  async createBuildpackJob(input: CreateBuildpackJobInput): Promise<void> {
+    await this.ensureNamespace(input.namespace);
+
+    const job = buildBuildpackJobManifest({
+      name: input.jobName,
+      labels: input.labels,
+      repoUrl: input.repoUrl,
+      branch: input.branch,
+      buildContext: input.buildContext,
+      clusterImage: input.clusterImage,
+      builderImage: input.builderImage,
+      runnerImage: input.runnerImage,
+      insecureRegistry: input.insecureRegistry,
+    });
+
+    await this.batchApi.createNamespacedJob(input.namespace, job);
+  }
+
+  // Reads live Kubernetes Job status for a build.
+  async getBuildJobStatus(namespace: string, jobName: string) {
+    const job = await this.batchApi.readNamespacedJob(jobName, namespace);
+    const status = job.body.status;
+
+    return {
+      active: status?.active ?? 0,
+      succeeded: status?.succeeded ?? 0,
+      failed: status?.failed ?? 0,
+      conditions: status?.conditions ?? [],
+    };
+  }
+
+  // Finds pods for a build Job by labels and returns logs from each matching pod.
+  async getBuildJobLogs(
+    namespace: string,
+    labels: Record<string, string>,
+  ): Promise<Array<{ podName: string; logs: string }>> {
+    return this.getPodLogsByLabels(namespace, labels);
   }
 
   // Reads live Kubernetes Deployment readiness and replica counts.
@@ -84,31 +204,7 @@ export class KubernetesService {
     namespace: string,
     labels: Record<string, string>,
   ): Promise<Array<{ podName: string; logs: string }>> {
-    const pods = await this.coreApi.listNamespacedPod(
-      namespace,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      toLabelSelector(labels),
-    );
-
-    return Promise.all(
-      pods.body.items.map(async (pod) => {
-        const podName = pod.metadata?.name;
-
-        if (!podName) {
-          throw new NotFoundException('A matching pod was missing its name');
-        }
-
-        const logs = await this.coreApi.readNamespacedPodLog(podName, namespace);
-
-        return {
-          podName,
-          logs: logs.body,
-        };
-      }),
-    );
+    return this.getPodLogsByLabels(namespace, labels);
   }
 
   // Deletes the Kubernetes resources that were created for a deployment.
@@ -125,6 +221,24 @@ export class KubernetesService {
     await this.deleteIfExists(() =>
       this.coreApi.deleteNamespacedConfigMap(names.configMapName, namespace),
     );
+    const fileConfigMapName = names.fileConfigMapName;
+    if (fileConfigMapName) {
+      await this.deleteIfExists(() =>
+        this.coreApi.deleteNamespacedConfigMap(fileConfigMapName, namespace),
+      );
+    }
+    const secretName = names.secretName;
+    if (secretName) {
+      await this.deleteIfExists(() =>
+        this.coreApi.deleteNamespacedSecret(secretName, namespace),
+      );
+    }
+    const secretFileSecretName = names.secretFileSecretName;
+    if (secretFileSecretName) {
+      await this.deleteIfExists(() =>
+        this.coreApi.deleteNamespacedSecret(secretFileSecretName, namespace),
+      );
+    }
   }
 
   // Creates the namespace only when it does not already exist.
@@ -172,6 +286,156 @@ export class KubernetesService {
     }
   }
 
+  // Creates or replaces the ConfigMap that stores mounted config files.
+  private async upsertFileConfigMap(input: DeployImageInput): Promise<void> {
+    const fileConfigMapName = input.names.fileConfigMapName;
+
+    if (input.files.items.length === 0) {
+      if (fileConfigMapName) {
+        await this.deleteIfExists(() =>
+          this.coreApi.deleteNamespacedConfigMap(
+            fileConfigMapName,
+            input.namespace,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (!fileConfigMapName) {
+      throw new Error('File config was provided without a Kubernetes ConfigMap name');
+    }
+
+    const configMap = buildConfigMapManifest({
+      name: fileConfigMapName,
+      labels: input.labels,
+      data: input.files.data,
+    });
+
+    try {
+      const existing = await this.coreApi.readNamespacedConfigMap(
+        fileConfigMapName,
+        input.namespace,
+      );
+      configMap.metadata = {
+        ...configMap.metadata,
+        resourceVersion: existing.body.metadata?.resourceVersion,
+      };
+
+      await this.coreApi.replaceNamespacedConfigMap(
+        fileConfigMapName,
+        input.namespace,
+        configMap,
+      );
+    } catch (error) {
+      if (!isKubernetesNotFound(error)) {
+        throw error;
+      }
+
+      await this.coreApi.createNamespacedConfigMap(input.namespace, configMap);
+    }
+  }
+
+  // Creates or replaces the Secret that stores secret env vars and secret files.
+  private async upsertSecret(input: DeployImageInput): Promise<void> {
+    const secretName = input.names.secretName;
+    const secretData = {
+      ...input.secrets,
+    };
+
+    if (Object.keys(secretData).length === 0) {
+      if (secretName) {
+        await this.deleteIfExists(() =>
+          this.coreApi.deleteNamespacedSecret(secretName, input.namespace),
+        );
+      }
+      return;
+    }
+
+    if (!secretName) {
+      throw new Error('Secret data was provided without a Kubernetes Secret name');
+    }
+
+    const secret = buildSecretManifest({
+      name: secretName,
+      labels: input.labels,
+      stringData: secretData,
+    });
+
+    try {
+      const existing = await this.coreApi.readNamespacedSecret(
+        secretName,
+        input.namespace,
+      );
+      secret.metadata = {
+        ...secret.metadata,
+        resourceVersion: existing.body.metadata?.resourceVersion,
+      };
+
+      await this.coreApi.replaceNamespacedSecret(
+        secretName,
+        input.namespace,
+        secret,
+      );
+    } catch (error) {
+      if (!isKubernetesNotFound(error)) {
+        throw error;
+      }
+
+      await this.coreApi.createNamespacedSecret(input.namespace, secret);
+    }
+  }
+
+  // Creates or replaces the Secret that stores mounted secret files.
+  private async upsertSecretFiles(input: DeployImageInput): Promise<void> {
+    const secretFileSecretName = input.names.secretFileSecretName;
+
+    if (input.secretFiles.items.length === 0) {
+      if (secretFileSecretName) {
+        await this.deleteIfExists(() =>
+          this.coreApi.deleteNamespacedSecret(
+            secretFileSecretName,
+            input.namespace,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (!secretFileSecretName) {
+      throw new Error('Secret files were provided without a Kubernetes Secret name');
+    }
+
+    const secret = buildSecretManifest({
+      name: secretFileSecretName,
+      labels: input.labels,
+      stringData: input.secretFiles.data,
+    });
+
+    try {
+      const existing = await this.coreApi.readNamespacedSecret(
+        secretFileSecretName,
+        input.namespace,
+      );
+      secret.metadata = {
+        ...secret.metadata,
+        resourceVersion: existing.body.metadata?.resourceVersion,
+      };
+
+      await this.coreApi.replaceNamespacedSecret(
+        secretFileSecretName,
+        input.namespace,
+        secret,
+      );
+    } catch (error) {
+      if (!isKubernetesNotFound(error)) {
+        throw error;
+      }
+
+      await this.coreApi.createNamespacedSecret(input.namespace, secret);
+    }
+  }
+
   // Creates or replaces the Kubernetes Deployment that runs the container image.
   private async upsertDeployment(input: DeployImageInput): Promise<void> {
     const deployment = buildDeploymentManifest({
@@ -181,6 +445,30 @@ export class KubernetesService {
       replicas: input.replicas,
       labels: input.labels,
       configMapName: input.names.configMapName,
+      secretName:
+        Object.keys(input.secrets).length > 0 ? input.names.secretName : undefined,
+      configFileConfigMapName:
+        input.files.items.length > 0 ? input.names.fileConfigMapName : undefined,
+      secretFileSecretName:
+        input.secretFiles.items.length > 0
+          ? input.names.secretFileSecretName
+          : undefined,
+      configFileVolume:
+        input.files.items.length > 0
+          ? {
+              name: 'config-files',
+              mountPath: '/app/config',
+              items: input.files.items,
+            }
+          : undefined,
+      secretFileVolume:
+        input.secretFiles.items.length > 0
+          ? {
+              name: 'secret-files',
+              mountPath: '/app/secrets',
+              items: input.secretFiles.items,
+            }
+          : undefined,
     });
 
     try {
@@ -255,6 +543,37 @@ export class KubernetesService {
         throw error;
       }
     }
+  }
+
+  private async getPodLogsByLabels(
+    namespace: string,
+    labels: Record<string, string>,
+  ): Promise<Array<{ podName: string; logs: string }>> {
+    const pods = await this.coreApi.listNamespacedPod(
+      namespace,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      toLabelSelector(labels),
+    );
+
+    return Promise.all(
+      pods.body.items.map(async (pod) => {
+        const podName = pod.metadata?.name;
+
+        if (!podName) {
+          throw new NotFoundException('A matching pod was missing its name');
+        }
+
+        const logs = await this.coreApi.readNamespacedPodLog(podName, namespace);
+
+        return {
+          podName,
+          logs: logs.body,
+        };
+      }),
+    );
   }
 }
 

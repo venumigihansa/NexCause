@@ -1,5 +1,24 @@
 import * as k8s from '@kubernetes/client-node';
 
-export function buildSecretManifest(): k8s.V1Secret {
-  throw new Error('Kubernetes Secret support is not implemented in Phase 1');
+interface BuildSecretManifestInput {
+  name: string;
+  labels: Record<string, string>;
+  stringData: Record<string, string>;
+}
+
+export function buildSecretManifest({
+  name,
+  labels,
+  stringData,
+}: BuildSecretManifestInput): k8s.V1Secret {
+  return {
+    apiVersion: 'v1',
+    kind: 'Secret',
+    type: 'Opaque',
+    metadata: {
+      name,
+      labels,
+    },
+    stringData,
+  };
 }

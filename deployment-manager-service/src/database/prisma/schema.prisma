@@ -28,6 +28,11 @@ enum BuildStatus {
   skipped
 }
 
+enum BuildStrategy {
+  dockerfile
+  buildpack
+}
+
 enum RuntimeConfigType {
   env
   secret
@@ -41,6 +46,10 @@ model App {
   sourceType   AppSourceType @default(image)
   image        String?
   defaultPort  Int?
+  repoUrl      String?
+  branch       String?
+  buildContext String?
+  dockerfilePath String?
   deployments  Deployment[]
   builds       Build[]
   createdAt    DateTime      @default(now())
@@ -51,6 +60,8 @@ model Deployment {
   id                    String             @id @default(cuid())
   appId                 String
   app                   App                @relation(fields: [appId], references: [id], onDelete: Cascade)
+  buildId               String?
+  build                 Build?             @relation(fields: [buildId], references: [id], onDelete: SetNull)
   namespace             String
   image                 String
   replicas              Int
@@ -59,11 +70,15 @@ model Deployment {
   kubernetesDeployment  String
   kubernetesService     String
   kubernetesConfigMap   String?
+  kubernetesFileConfigMap String?
+  kubernetesSecret      String?
+  kubernetesSecretFiles String?
   runtimeConfigs        RuntimeConfig[]
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
 
   @@index([appId])
+  @@index([buildId])
   @@index([namespace])
 }
 
@@ -80,13 +95,22 @@ model RuntimeConfig {
 }
 
 model Build {
-  id         String      @id @default(cuid())
-  appId      String
-  app        App         @relation(fields: [appId], references: [id], onDelete: Cascade)
-  status     BuildStatus @default(pending)
-  image      String?
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  id             String      @id @default(cuid())
+  appId          String
+  app            App         @relation(fields: [appId], references: [id], onDelete: Cascade)
+  deployments    Deployment[]
+  status         BuildStatus @default(pending)
+  strategy       BuildStrategy @default(dockerfile)
+  repoUrl        String
+  branch         String
+  buildContext   String
+  dockerfilePath String?
+  image          String?
+  kubernetesJob  String?
+  errorMessage   String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
   @@index([appId])
+  @@index([status])
 }

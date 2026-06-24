@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  BuildStatus,
   Deployment,
   DeploymentStatus,
   Prisma,
@@ -30,7 +31,7 @@ export class DeploymentsService {
   async create(appId: string, createDeploymentDto: CreateDeploymentDto) {
     const app = await this.appsService.findOneOrThrow(appId);
     const deploymentId = randomUUID();
-    const image = createDeploymentDto.image ?? app.image;
+    const image = await this.resolveDeploymentImage(appId, createDeploymentDto);
     const port = createDeploymentDto.port ?? app.defaultPort;
     const namespace =
       createDeploymentDto.namespace ??
@@ -38,12 +39,15 @@ export class DeploymentsService {
       'apps';
     const replicas = createDeploymentDto.replicas ?? 1;
     const env = normalizeEnv(createDeploymentDto.env ?? {});
-
-    if (!image) {
-      throw new BadRequestException(
-        'Deployment image is required when the app has no default image',
-      );
-    }
+    const secrets = normalizeEnv(createDeploymentDto.secrets ?? {});
+    const files = normalizeFileConfig(createDeploymentDto.files ?? {});
+    const secretFiles = normalizeFileConfig(createDeploymentDto.secretFiles ?? {});
+    const runtimeConfigRecords = buildRuntimeConfigRecords(
+      env,
+      secrets,
+      files.raw,
+      secretFiles.raw,
+    );
 
     if (!port) {
       throw new BadRequestException(
@@ -58,6 +62,7 @@ export class DeploymentsService {
       data: {
         id: deploymentId,
         appId: app.id,
+        buildId: createDeploymentDto.buildId,
         namespace,
         image,
         replicas,
@@ -66,12 +71,16 @@ export class DeploymentsService {
         kubernetesDeployment: names.deploymentName,
         kubernetesService: names.serviceName,
         kubernetesConfigMap: names.configMapName,
-        runtimeConfigs: {
-          create: {
-            type: RuntimeConfigType.env,
-            data: env as Prisma.InputJsonObject,
-          },
-        },
+        kubernetesFileConfigMap: names.fileConfigMapName,
+        kubernetesSecret: names.secretName,
+        kubernetesSecretFiles: names.secretFileSecretName,
+        ...(runtimeConfigRecords.length > 0
+          ? {
+              runtimeConfigs: {
+                create: runtimeConfigRecords,
+              },
+            }
+          : {}),
       },
       include: {
         runtimeConfigs: true,
@@ -86,6 +95,9 @@ export class DeploymentsService {
         port,
         replicas,
         env,
+        secrets,
+        files,
+        secretFiles,
         labels,
       });
     } catch (error) {
@@ -97,20 +109,22 @@ export class DeploymentsService {
       throw error;
     }
 
-    return deployment;
+    return sanitizeDeployment(deployment);
   }
 
   // Returns all deployments for an app after confirming the app exists.
   async findByApp(appId: string) {
     await this.appsService.findOneOrThrow(appId);
 
-    return this.prisma.deployment.findMany({
+    const deployments = await this.prisma.deployment.findMany({
       where: { appId },
       orderBy: { createdAt: 'desc' },
       include: {
         runtimeConfigs: true,
       },
     });
+
+    return deployments.map(sanitizeDeployment);
   }
 
   // Reads live Kubernetes status and updates the stored status when ready.
@@ -177,6 +191,45 @@ export class DeploymentsService {
     });
   }
 
+  private async resolveDeploymentImage(
+    appId: string,
+    createDeploymentDto: CreateDeploymentDto,
+  ): Promise<string> {
+    if (createDeploymentDto.image && createDeploymentDto.buildId) {
+      throw new BadRequestException('Provide either image or buildId, not both');
+    }
+
+    if (!createDeploymentDto.image && !createDeploymentDto.buildId) {
+      throw new BadRequestException('Either image or buildId is required');
+    }
+
+    if (createDeploymentDto.image) {
+      return createDeploymentDto.image;
+    }
+
+    const build = await this.prisma.build.findUnique({
+      where: { id: createDeploymentDto.buildId },
+    });
+
+    if (!build) {
+      throw new NotFoundException(`Build ${createDeploymentDto.buildId} was not found`);
+    }
+
+    if (build.appId !== appId) {
+      throw new BadRequestException('Build does not belong to this app');
+    }
+
+    if (build.status !== BuildStatus.succeeded) {
+      throw new BadRequestException('Build must be succeeded before deployment');
+    }
+
+    if (!build.image) {
+      throw new BadRequestException('Build has no deployable image');
+    }
+
+    return build.image;
+  }
+
   // Loads one deployment from Postgres or throws a 404 for API callers.
   private async findOneOrThrow(id: string) {
     const deployment = await this.prisma.deployment.findUnique({
@@ -200,6 +253,129 @@ function normalizeEnv(env: Record<string, string>): Record<string, string> {
   );
 }
 
+function normalizeFileConfig(files: Record<string, string>): {
+  raw: Record<string, string>;
+  data: Record<string, string>;
+  items: Array<{ key: string; path: string }>;
+} {
+  const entries = Object.entries(files);
+  const raw = Object.fromEntries(
+    entries.map(([path, value]) => {
+      validateRelativeFilePath(path);
+      return [path, String(value)];
+    }),
+  );
+
+  return {
+    raw,
+    data: Object.fromEntries(
+      entries.map(([path, value], index) => [`file-${index}`, String(value)]),
+    ),
+    items: entries.map(([path], index) => ({
+      key: `file-${index}`,
+      path,
+    })),
+  };
+}
+
+function validateRelativeFilePath(path: string): void {
+  if (path.startsWith('/') || path.includes('..')) {
+    throw new BadRequestException(
+      'File config paths must be relative and cannot contain ..',
+    );
+  }
+
+  if (!path.trim()) {
+    throw new BadRequestException('File config paths cannot be empty');
+  }
+}
+
+function buildRuntimeConfigRecords(
+  env: Record<string, string>,
+  secrets: Record<string, string>,
+  files: Record<string, string>,
+  secretFiles: Record<string, string>,
+): Array<{ type: RuntimeConfigType; data: Prisma.InputJsonObject }> {
+  const records: Array<{ type: RuntimeConfigType; data: Prisma.InputJsonObject }> = [];
+
+  if (Object.keys(env).length > 0) {
+    records.push({
+      type: RuntimeConfigType.env,
+      data: env as Prisma.InputJsonObject,
+    });
+  }
+
+  if (Object.keys(secrets).length > 0 || Object.keys(secretFiles).length > 0) {
+    records.push({
+      type: RuntimeConfigType.secret,
+      data: {
+        envKeys: Object.keys(secrets),
+        filePaths: Object.keys(secretFiles),
+      } as Prisma.InputJsonObject,
+    });
+  }
+
+  if (Object.keys(files).length > 0) {
+    records.push({
+      type: RuntimeConfigType.file,
+      data: files as Prisma.InputJsonObject,
+    });
+  }
+
+  return records;
+}
+
+function sanitizeDeployment<T extends { runtimeConfigs?: Array<{ type: RuntimeConfigType; data: unknown }> }>(
+  deployment: T,
+): T {
+  if (!deployment.runtimeConfigs) {
+    return deployment;
+  }
+
+  return {
+    ...deployment,
+    runtimeConfigs: deployment.runtimeConfigs.map((runtimeConfig) => {
+      if (runtimeConfig.type !== RuntimeConfigType.secret) {
+        return runtimeConfig;
+      }
+
+      return {
+        ...runtimeConfig,
+        data: redactSecretRuntimeConfig(runtimeConfig.data),
+      };
+    }),
+  };
+}
+
+function redactSecretRuntimeConfig(data: unknown): {
+  envKeys: string[];
+  filePaths: string[];
+} {
+  if (!isRecord(data)) {
+    return {
+      envKeys: [],
+      filePaths: [],
+    };
+  }
+
+  return {
+    envKeys: Array.isArray(data.envKeys)
+      ? data.envKeys.map(String)
+      : isRecord(data.env)
+        ? Object.keys(data.env)
+        : [],
+    filePaths: Array.isArray(data.filePaths)
+      ? data.filePaths.map(String)
+      : isRecord(data.files)
+        ? Object.keys(data.files)
+        : [],
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function deploymentToResourceNames(deployment: Deployment): KubernetesResourceNames {
   if (!deployment.kubernetesConfigMap) {
     throw new BadRequestException('Deployment has no Kubernetes ConfigMap name');
@@ -209,5 +385,8 @@ function deploymentToResourceNames(deployment: Deployment): KubernetesResourceNa
     deploymentName: deployment.kubernetesDeployment,
     serviceName: deployment.kubernetesService,
     configMapName: deployment.kubernetesConfigMap,
+    fileConfigMapName: deployment.kubernetesFileConfigMap ?? undefined,
+    secretName: deployment.kubernetesSecret ?? undefined,
+    secretFileSecretName: deployment.kubernetesSecretFiles ?? undefined,
   };
 }
