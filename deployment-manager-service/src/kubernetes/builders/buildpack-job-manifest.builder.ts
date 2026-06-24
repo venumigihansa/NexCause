@@ -86,7 +86,8 @@ export function buildBuildpackJobManifest({
                   ].join(' '),
                   'for i in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 1; done',
                   'docker info',
-                  `pack build ${clusterImage} --path ${appPath} --builder ${builderImage} --publish`,
+                  `pack build ${clusterImage} --path ${appPath} --builder ${builderImage} --network host`,
+                  `docker push ${clusterImage}`,
                 ].join('\n'),
               ],
               volumeMounts: [
