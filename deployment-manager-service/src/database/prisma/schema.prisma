@@ -65,6 +65,8 @@ model Deployment {
   namespace             String
   image                 String
   replicas              Int
+  desiredReplicas       Int                @default(1)
+  lastNonZeroReplicas   Int?
   port                  Int
   status                DeploymentStatus   @default(creating)
   kubernetesDeployment  String
@@ -74,12 +76,29 @@ model Deployment {
   kubernetesSecret      String?
   kubernetesSecretFiles String?
   runtimeConfigs        RuntimeConfig[]
+  evidenceSnapshots     EvidenceSnapshot[]
+  stoppedAt             DateTime?
+  lastRestartedAt       DateTime?
+  deletedAt             DateTime?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
 
   @@index([appId])
   @@index([buildId])
   @@index([namespace])
+}
+
+model EvidenceSnapshot {
+  id            String     @id @default(cuid())
+  deploymentId  String
+  deployment    Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  status        String
+  summary       String?
+  data          Json
+  createdAt     DateTime   @default(now())
+
+  @@index([deploymentId])
+  @@index([createdAt])
 }
 
 model RuntimeConfig {

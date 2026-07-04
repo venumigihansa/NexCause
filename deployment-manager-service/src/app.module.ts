@@ -9,6 +9,7 @@ import { BuildsModule } from './builds/builds.module';
 import { ConfigsModule } from './configs/configs.module';
 import { DatabaseModule } from './database/database.module';
 import { DeploymentsModule } from './deployments/deployments.module';
+import { EvidenceModule } from './evidence/evidence.module';
 import { KubernetesModule } from './kubernetes/kubernetes.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { RcaModule } from './rca/rca.module';
@@ -26,6 +27,7 @@ import { SourceControlModule } from './source-control/source-control.module';
     KubernetesModule,
     AppsModule,
     DeploymentsModule,
+    EvidenceModule,
     ConfigsModule,
     BuildsModule,
     RegistryModule,

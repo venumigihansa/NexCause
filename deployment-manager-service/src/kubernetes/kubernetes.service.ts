@@ -199,12 +199,119 @@ export class KubernetesService {
     };
   }
 
+  // Updates the number of replicas Kubernetes should run for a Deployment.
+  async scaleDeployment(
+    namespace: string,
+    deploymentName: string,
+    replicas: number,
+  ): Promise<void> {
+    await this.appsApi.patchNamespacedDeployment(
+      deploymentName,
+      namespace,
+      {
+        spec: {
+          replicas,
+        },
+      },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      mergePatchOptions(),
+    );
+  }
+
+  // Triggers a rollout restart by changing the pod template annotation.
+  async msrestartDeployment(
+    namespace: string,
+    deploymentName: string,
+  ): Promise<string> {
+    const restartedAt = new Date().toISOString();
+
+    await this.appsApi.patchNamespacedDeployment(
+      deploymentName,
+      namespace,
+      {
+        spec: {
+          template: {
+            metadata: {
+              annotations: {
+                'kubectl.kubernetes.io/restartedAt': restartedAt,
+              },
+            },
+          },
+        },
+      },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      mergePatchOptions(),
+    );
+
+    return restartedAt;
+  }
+
+  // Lists pods selected by a deployment's managed labels.
+  async listDeploymentPods(
+    namespace: string,
+    labels: Record<string, string>,
+  ): Promise<DeploymentPodSummary[]> {
+    const pods = await this.coreApi.listNamespacedPod(
+      namespace,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      toLabelSelector(labels),
+    );
+
+    return pods.body.items.map(toDeploymentPodSummary);
+  }
+
+  // Lists Kubernetes events related to a deployment and its managed pods.
+  async listDeploymentEvents(
+    namespace: string,
+    deploymentName: string,
+    labels: Record<string, string>,
+  ): Promise<DeploymentEventSummary[]> {
+    const [allEvents, pods] = await Promise.all([
+      this.coreApi.listNamespacedEvent(namespace),
+      this.listDeploymentPods(namespace, labels),
+    ]);
+    const podNames = new Set(pods.map((pod) => pod.name));
+
+    return allEvents.body.items
+      .filter((event) => {
+        const involvedName = event.involvedObject?.name;
+
+        return (
+          involvedName === deploymentName ||
+          (involvedName !== undefined && podNames.has(involvedName)) ||
+          involvedName?.startsWith(`${deploymentName}-`)
+        );
+      })
+      .sort((a, b) => getEventTime(a).localeCompare(getEventTime(b)))
+      .map(toDeploymentEventSummary);
+  }
+
   // Finds pods by deployment labels and returns logs from each matching pod.
   async getDeploymentLogs(
     namespace: string,
     labels: Record<string, string>,
   ): Promise<Array<{ podName: string; logs: string }>> {
     return this.getPodLogsByLabels(namespace, labels);
+  }
+
+  // Returns a bounded log tail from each current pod for evidence snapshots.
+  async getDeploymentEvidenceLogs(
+    namespace: string,
+    labels: Record<string, string>,
+    tailLines = 200,
+  ): Promise<Array<{ podName: string; logs: string }>> {
+    return this.getPodLogsByLabels(namespace, labels, tailLines);
   }
 
   // Deletes the Kubernetes resources that were created for a deployment.
@@ -548,6 +655,7 @@ export class KubernetesService {
   private async getPodLogsByLabels(
     namespace: string,
     labels: Record<string, string>,
+    tailLines?: number,
   ): Promise<Array<{ podName: string; logs: string }>> {
     const pods = await this.coreApi.listNamespacedPod(
       namespace,
@@ -566,7 +674,19 @@ export class KubernetesService {
           throw new NotFoundException('A matching pod was missing its name');
         }
 
-        const logs = await this.coreApi.readNamespacedPodLog(podName, namespace);
+        const logs = await this.coreApi.readNamespacedPodLog(
+          podName,
+          namespace,
+          undefined,
+          false,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          tailLines,
+          true,
+        );
 
         return {
           podName,
@@ -575,6 +695,47 @@ export class KubernetesService {
       }),
     );
   }
+}
+
+export interface DeploymentPodSummary {
+  name: string;
+  namespace?: string;
+  phase?: string;
+  podIP?: string;
+  hostIP?: string;
+  nodeName?: string;
+  startTime?: Date;
+  labels?: Record<string, string>;
+  conditions: Array<{
+    type?: string;
+    status?: string;
+    reason?: string;
+    message?: string;
+    lastTransitionTime?: Date;
+  }>;
+  containers: Array<{
+    name: string;
+    image?: string;
+    ready?: boolean;
+    restartCount: number;
+    state?: unknown;
+    lastState?: unknown;
+  }>;
+}
+
+export interface DeploymentEventSummary {
+  name?: string;
+  type?: string;
+  reason?: string;
+  message?: string;
+  count?: number;
+  involvedObject?: {
+    kind?: string;
+    name?: string;
+  };
+  firstTimestamp?: Date;
+  lastTimestamp?: Date;
+  eventTime?: string;
 }
 
 function toDnsSafeName(value: string): string {
@@ -590,6 +751,70 @@ function toLabelSelector(labels: Record<string, string>): string {
   return Object.entries(labels)
     .map(([key, value]) => `${key}=${value}`)
     .join(',');
+}
+
+function mergePatchOptions(): { headers: { 'Content-Type': string } } {
+  return {
+    headers: {
+      'Content-Type': 'application/merge-patch+json',
+    },
+  };
+}
+
+function toDeploymentPodSummary(pod: k8s.V1Pod): DeploymentPodSummary {
+  return {
+    name: pod.metadata?.name ?? '',
+    namespace: pod.metadata?.namespace,
+    phase: pod.status?.phase,
+    podIP: pod.status?.podIP,
+    hostIP: pod.status?.hostIP,
+    nodeName: pod.spec?.nodeName,
+    startTime: pod.status?.startTime,
+    labels: pod.metadata?.labels,
+    conditions:
+      pod.status?.conditions?.map((condition) => ({
+        type: condition.type,
+        status: condition.status,
+        reason: condition.reason,
+        message: condition.message,
+        lastTransitionTime: condition.lastTransitionTime,
+      })) ?? [],
+    containers:
+      pod.status?.containerStatuses?.map((container) => ({
+        name: container.name,
+        image: container.image,
+        ready: container.ready,
+        restartCount: container.restartCount,
+        state: container.state,
+        lastState: container.lastState,
+      })) ?? [],
+  };
+}
+
+function toDeploymentEventSummary(event: k8s.CoreV1Event): DeploymentEventSummary {
+  return {
+    name: event.metadata?.name,
+    type: event.type,
+    reason: event.reason,
+    message: event.message,
+    count: event.count,
+    involvedObject: {
+      kind: event.involvedObject?.kind,
+      name: event.involvedObject?.name,
+    },
+    firstTimestamp: event.firstTimestamp,
+    lastTimestamp: event.lastTimestamp,
+    eventTime: getEventTime(event),
+  };
+}
+
+function getEventTime(event: k8s.CoreV1Event): string {
+  return (
+    event.lastTimestamp?.toISOString() ??
+    event.firstTimestamp?.toISOString() ??
+    event.metadata?.creationTimestamp?.toISOString() ??
+    ''
+  );
 }
 
 function isKubernetesNotFound(error: unknown): boolean {

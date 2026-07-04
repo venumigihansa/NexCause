@@ -17,6 +17,8 @@ import { PrismaService } from '../database/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { KubernetesResourceNames } from '../kubernetes/types/kubernetes-resource-names';
 import { CreateDeploymentDto } from './dto/create-deployment.dto';
+import { ScaleDeploymentDto } from './dto/scale-deployment.dto';
+import { StartDeploymentDto } from './dto/start-deployment.dto';
 
 @Injectable()
 export class DeploymentsService {
@@ -66,6 +68,8 @@ export class DeploymentsService {
         namespace,
         image,
         replicas,
+        desiredReplicas: replicas,
+        lastNonZeroReplicas: replicas > 0 ? replicas : undefined,
         port,
         status: DeploymentStatus.creating,
         kubernetesDeployment: names.deploymentName,
@@ -135,7 +139,7 @@ export class DeploymentsService {
       return {
         deploymentId: deployment.id,
         status: DeploymentStatus.deleted,
-        desiredReplicas: deployment.replicas,
+        desiredReplicas: deployment.desiredReplicas,
         readyReplicas: 0,
       };
     }
@@ -167,12 +171,123 @@ export class DeploymentsService {
   // Finds pods for a deployment by labels and returns their logs.
   async getLogs(id: string) {
     const deployment = await this.findOneOrThrow(id);
-    const labels = this.kubernetesService.buildManagedLabels(
-      deployment.appId,
-      deployment.id,
-    );
+    const labels = this.getManagedLabels(deployment);
 
     return this.kubernetesService.getDeploymentLogs(deployment.namespace, labels);
+  }
+
+  // Lists pods currently selected by this deployment's managed labels.
+  async getPods(id: string) {
+    const deployment = await this.findOneOrThrow(id);
+
+    return this.kubernetesService.listDeploymentPods(
+      deployment.namespace,
+      this.getManagedLabels(deployment),
+    );
+  }
+
+  // Lists Kubernetes events related to the Deployment and its pods.
+  async getEvents(id: string) {
+    const deployment = await this.findOneOrThrow(id);
+
+    return this.kubernetesService.listDeploymentEvents(
+      deployment.namespace,
+      deployment.kubernetesDeployment,
+      this.getManagedLabels(deployment),
+    );
+  }
+
+  // Changes the desired replica count for a running Kubernetes Deployment.
+  async scale(id: string, scaleDeploymentDto: ScaleDeploymentDto) {
+    const deployment = await this.findOneOrThrow(id);
+    const replicas = scaleDeploymentDto.replicas;
+
+    await this.kubernetesService.scaleDeployment(
+      deployment.namespace,
+      deployment.kubernetesDeployment,
+      replicas,
+    );
+
+    return this.prisma.deployment.update({
+      where: { id },
+      data: {
+        replicas,
+        desiredReplicas: replicas,
+        lastNonZeroReplicas:
+          replicas > 0 ? replicas : deployment.lastNonZeroReplicas,
+        status:
+          replicas === 0 ? DeploymentStatus.stopped : DeploymentStatus.creating,
+        stoppedAt: replicas === 0 ? new Date() : null,
+      },
+    });
+  }
+
+  // Stops a deployment without deleting Kubernetes resources by scaling to zero.
+  async stop(id: string) {
+    const deployment = await this.findOneOrThrow(id);
+
+    await this.kubernetesService.scaleDeployment(
+      deployment.namespace,
+      deployment.kubernetesDeployment,
+      0,
+    );
+
+    return this.prisma.deployment.update({
+      where: { id },
+      data: {
+        replicas: 0,
+        desiredReplicas: 0,
+        lastNonZeroReplicas:
+          deployment.replicas > 0
+            ? deployment.replicas
+            : deployment.lastNonZeroReplicas,
+        status: DeploymentStatus.stopped,
+        stoppedAt: new Date(),
+      },
+    });
+  }
+
+  // Starts a stopped deployment by restoring the last non-zero replica count.
+  async start(id: string, startDeploymentDto: StartDeploymentDto = {}) {
+    const deployment = await this.findOneOrThrow(id);
+    const replicas =
+      startDeploymentDto.replicas ??
+      deployment.lastNonZeroReplicas ??
+      (deployment.desiredReplicas > 0 ? deployment.desiredReplicas : 1);
+
+    await this.kubernetesService.scaleDeployment(
+      deployment.namespace,
+      deployment.kubernetesDeployment,
+      replicas,
+    );
+
+    return this.prisma.deployment.update({
+      where: { id },
+      data: {
+        replicas,
+        desiredReplicas: replicas,
+        lastNonZeroReplicas: replicas,
+        status: DeploymentStatus.creating,
+        stoppedAt: null,
+      },
+    });
+  }
+
+  // Triggers a Kubernetes rollout restart for the existing Deployment.
+  async restart(id: string) {
+    const deployment = await this.findOneOrThrow(id);
+    const restartedAt = await this.kubernetesService.restartDeployment(
+      deployment.namespace,
+      deployment.kubernetesDeployment,
+    );
+
+    return this.prisma.deployment.update({
+      where: { id },
+      data: {
+        status: DeploymentStatus.creating,
+        lastRestartedAt: new Date(restartedAt),
+      },
+    });
   }
 
   // Removes Kubernetes resources and keeps the DB record as deleted history.
@@ -187,8 +302,18 @@ export class DeploymentsService {
 
     return this.prisma.deployment.update({
       where: { id },
-      data: { status: DeploymentStatus.deleted },
+      data: {
+        status: DeploymentStatus.deleted,
+        deletedAt: new Date(),
+      },
     });
+  }
+
+  private getManagedLabels(deployment: Deployment): Record<string, string> {
+    return this.kubernetesService.buildManagedLabels(
+      deployment.appId,
+      deployment.id,
+    );
   }
 
   private async resolveDeploymentImage(
