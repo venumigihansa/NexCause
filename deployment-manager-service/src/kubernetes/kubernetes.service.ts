@@ -223,7 +223,7 @@ export class KubernetesService {
   }
 
   // Triggers a rollout restart by changing the pod template annotation.
-  async msrestartDeployment(
+  async restartDeployment(
     namespace: string,
     deploymentName: string,
   ): Promise<string> {
