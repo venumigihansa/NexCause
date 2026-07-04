@@ -18,7 +18,7 @@ export class EvidenceService {
       deployment.id,
     );
     const collectedAt = new Date().toISOString();
-    const [status, pods, events, logs] = await Promise.all([
+    const [status, pods, events, logs, healthSamples] = await Promise.all([
       collectOrError(() =>
         this.kubernetesService.getDeploymentStatus(
           deployment.namespace,
@@ -41,6 +41,16 @@ export class EvidenceService {
           labels,
         ),
       ),
+      this.prisma.deploymentHealthSample.findMany({
+        where: {
+          deploymentId: deployment.id,
+          collectedAt: {
+            gte: minutesAgo(60),
+          },
+        },
+        orderBy: { collectedAt: 'desc' },
+        take: 120,
+      }),
     ]);
 
     const evidenceStatus = deriveEvidenceStatus(deployment.status, status);
@@ -100,6 +110,7 @@ export class EvidenceService {
         events,
         logs,
       },
+      healthSamples,
     };
   }
 
@@ -287,4 +298,8 @@ function getErrorMessage(error: unknown): string {
   }
 
   return 'Unknown error';
+}
+
+function minutesAgo(minutes: number): Date {
+  return new Date(Date.now() - minutes * 60 * 1000);
 }

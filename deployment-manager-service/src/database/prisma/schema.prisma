@@ -77,6 +77,7 @@ model Deployment {
   kubernetesSecretFiles String?
   runtimeConfigs        RuntimeConfig[]
   evidenceSnapshots     EvidenceSnapshot[]
+  healthSamples         DeploymentHealthSample[]
   stoppedAt             DateTime?
   lastRestartedAt       DateTime?
   deletedAt             DateTime?
@@ -86,6 +87,24 @@ model Deployment {
   @@index([appId])
   @@index([buildId])
   @@index([namespace])
+}
+
+model DeploymentHealthSample {
+  id                 String     @id @default(cuid())
+  deploymentId       String
+  deployment         Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  status             String
+  desiredReplicas    Int
+  readyReplicas      Int
+  availableReplicas  Int
+  podCount           Int
+  warningEventCount  Int
+  restartCount       Int
+  data               Json
+  collectedAt        DateTime   @default(now())
+
+  @@index([deploymentId, collectedAt])
+  @@index([collectedAt])
 }
 
 model EvidenceSnapshot {

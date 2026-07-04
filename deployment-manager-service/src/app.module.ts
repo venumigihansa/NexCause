@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import kubernetesConfig from './config/kubernetes.config';
+import observabilityConfig from './config/observability.config';
 import registryConfig from './config/registry.config';
 import { AppsModule } from './apps/apps.module';
 import { BuildsModule } from './builds/builds.module';
@@ -21,7 +22,13 @@ import { SourceControlModule } from './source-control/source-control.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, kubernetesConfig, registryConfig],
+      load: [
+        appConfig,
+        databaseConfig,
+        kubernetesConfig,
+        observabilityConfig,
+        registryConfig,
+      ],
     }),
     DatabaseModule,
     KubernetesModule,

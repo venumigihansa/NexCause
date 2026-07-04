@@ -16,6 +16,7 @@ import { AppsService } from '../apps/apps.service';
 import { PrismaService } from '../database/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { KubernetesResourceNames } from '../kubernetes/types/kubernetes-resource-names';
+import { ObservabilityService } from '../observability/observability.service';
 import { CreateDeploymentDto } from './dto/create-deployment.dto';
 import { ScaleDeploymentDto } from './dto/scale-deployment.dto';
 import { StartDeploymentDto } from './dto/start-deployment.dto';
@@ -26,6 +27,7 @@ export class DeploymentsService {
     private readonly appsService: AppsService,
     private readonly configService: ConfigService,
     private readonly kubernetesService: KubernetesService,
+    private readonly observabilityService: ObservabilityService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -40,10 +42,21 @@ export class DeploymentsService {
       this.configService.get<string>('defaultNamespace') ??
       'apps';
     const replicas = createDeploymentDto.replicas ?? 1;
-    const env = normalizeEnv(createDeploymentDto.env ?? {});
     const secrets = normalizeEnv(createDeploymentDto.secrets ?? {});
     const files = normalizeFileConfig(createDeploymentDto.files ?? {});
     const secretFiles = normalizeFileConfig(createDeploymentDto.secretFiles ?? {});
+    const names = this.kubernetesService.buildResourceNames(app.name, deploymentId);
+    const labels = this.kubernetesService.buildManagedLabels(app.id, deploymentId);
+    const env = {
+      ...normalizeEnv(createDeploymentDto.env ?? {}),
+      ...this.observabilityService.buildTelemetryEnv({
+        appId: app.id,
+        appName: app.name,
+        deploymentId,
+        deploymentName: names.deploymentName,
+        namespace,
+      }),
+    };
     const runtimeConfigRecords = buildRuntimeConfigRecords(
       env,
       secrets,
@@ -56,9 +69,6 @@ export class DeploymentsService {
         'Deployment port is required when the app has no default port',
       );
     }
-
-    const names = this.kubernetesService.buildResourceNames(app.name, deploymentId);
-    const labels = this.kubernetesService.buildManagedLabels(app.id, deploymentId);
 
     const deployment = await this.prisma.deployment.create({
       data: {
