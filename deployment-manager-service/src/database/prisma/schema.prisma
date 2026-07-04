@@ -39,6 +39,34 @@ enum RuntimeConfigType {
   file
 }
 
+enum IncidentStatus {
+  open
+  resolved
+}
+
+enum IncidentSeverity {
+  info
+  warning
+  critical
+}
+
+enum IncidentSource {
+  manual
+  automatic
+}
+
+enum RcaRunStatus {
+  pending
+  running
+  completed
+  failed
+}
+
+enum RcaRunSource {
+  manual
+  automatic
+}
+
 model App {
   id           String        @id @default(cuid())
   name         String        @unique
@@ -52,6 +80,7 @@ model App {
   dockerfilePath String?
   deployments  Deployment[]
   builds       Build[]
+  incidents    Incident[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 }
@@ -78,6 +107,8 @@ model Deployment {
   runtimeConfigs        RuntimeConfig[]
   evidenceSnapshots     EvidenceSnapshot[]
   healthSamples         DeploymentHealthSample[]
+  incidents             Incident[]
+  rcaRuns               RcaRun[]
   stoppedAt             DateTime?
   lastRestartedAt       DateTime?
   deletedAt             DateTime?
@@ -101,10 +132,61 @@ model DeploymentHealthSample {
   warningEventCount  Int
   restartCount       Int
   data               Json
+  incidents          Incident[]
   collectedAt        DateTime   @default(now())
 
   @@index([deploymentId, collectedAt])
   @@index([collectedAt])
+}
+
+model Incident {
+  id                    String                  @id @default(cuid())
+  appId                 String
+  app                   App                     @relation(fields: [appId], references: [id], onDelete: Cascade)
+  deploymentId          String
+  deployment            Deployment              @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  status                IncidentStatus          @default(open)
+  severity              IncidentSeverity        @default(warning)
+  source                IncidentSource
+  ruleKey               String?
+  title                 String
+  summary               String?
+  metadata              Json?
+  latestHealthSampleId  String?
+  latestHealthSample    DeploymentHealthSample? @relation(fields: [latestHealthSampleId], references: [id], onDelete: SetNull)
+  rcaRuns               RcaRun[]
+  openedAt              DateTime                @default(now())
+  resolvedAt            DateTime?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  @@index([appId])
+  @@index([deploymentId, status])
+  @@index([latestHealthSampleId])
+  @@index([status])
+}
+
+model RcaRun {
+  id                 String            @id @default(cuid())
+  incidentId         String
+  incident           Incident          @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  deploymentId       String
+  deployment         Deployment        @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  evidenceSnapshotId String?
+  evidenceSnapshot   EvidenceSnapshot? @relation(fields: [evidenceSnapshotId], references: [id], onDelete: SetNull)
+  status             RcaRunStatus      @default(pending)
+  source             RcaRunSource
+  result             Json?
+  errorMessage       String?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([incidentId])
+  @@index([deploymentId])
+  @@index([evidenceSnapshotId])
+  @@index([status])
 }
 
 model EvidenceSnapshot {
@@ -114,6 +196,7 @@ model EvidenceSnapshot {
   status        String
   summary       String?
   data          Json
+  rcaRuns       RcaRun[]
   createdAt     DateTime   @default(now())
 
   @@index([deploymentId])

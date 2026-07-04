@@ -8,5 +8,6 @@ import { EvidenceService } from './evidence.service';
   imports: [DatabaseModule, KubernetesModule],
   controllers: [EvidenceController],
   providers: [EvidenceService],
+  exports: [EvidenceService],
 })
 export class EvidenceModule {}

@@ -4,6 +4,7 @@ import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import kubernetesConfig from './config/kubernetes.config';
 import observabilityConfig from './config/observability.config';
+import rcaConfig from './config/rca.config';
 import registryConfig from './config/registry.config';
 import { AppsModule } from './apps/apps.module';
 import { BuildsModule } from './builds/builds.module';
@@ -11,6 +12,7 @@ import { ConfigsModule } from './configs/configs.module';
 import { DatabaseModule } from './database/database.module';
 import { DeploymentsModule } from './deployments/deployments.module';
 import { EvidenceModule } from './evidence/evidence.module';
+import { IncidentsModule } from './incidents/incidents.module';
 import { KubernetesModule } from './kubernetes/kubernetes.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { RcaModule } from './rca/rca.module';
@@ -27,6 +29,7 @@ import { SourceControlModule } from './source-control/source-control.module';
         databaseConfig,
         kubernetesConfig,
         observabilityConfig,
+        rcaConfig,
         registryConfig,
       ],
     }),
@@ -35,13 +38,14 @@ import { SourceControlModule } from './source-control/source-control.module';
     AppsModule,
     DeploymentsModule,
     EvidenceModule,
+    IncidentsModule,
     ConfigsModule,
     BuildsModule,
+    RcaModule,
     RegistryModule,
     SourceControlModule,
     RuntimeModule,
     ObservabilityModule,
-    RcaModule,
   ],
 })
 export class AppModule {}
