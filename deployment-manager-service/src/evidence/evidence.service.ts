@@ -3,6 +3,24 @@ import { Prisma, RuntimeConfigType } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 
+export interface EvidenceWindowOptions {
+  triggeredAt?: Date;
+  windowStart?: Date;
+  windowEnd?: Date;
+  lookbackMinutes?: number;
+  lookaheadMinutes?: number;
+  reason?: string;
+}
+
+interface EvidenceWindow {
+  triggeredAt: Date;
+  start: Date;
+  end: Date;
+  lookbackMinutes: number;
+  lookaheadMinutes: number;
+  reason: string;
+}
+
 @Injectable()
 export class EvidenceService {
   constructor(
@@ -11,14 +29,19 @@ export class EvidenceService {
   ) {}
 
   // Collects live Kubernetes and database evidence for one deployment.
-  async collectLive(deploymentId: string) {
+  async collectLive(
+    deploymentId: string,
+    windowOptions: EvidenceWindowOptions = {},
+  ) {
     const deployment = await this.findDeploymentForEvidence(deploymentId);
     const labels = this.kubernetesService.buildManagedLabels(
       deployment.appId,
       deployment.id,
     );
-    const collectedAt = new Date().toISOString();
-    const [status, pods, events, logs, healthSamples] = await Promise.all([
+    const collectedAt = new Date();
+    const window = buildEvidenceWindow(windowOptions, collectedAt);
+    const sinceSeconds = secondsBetween(window.start, collectedAt);
+    const [status, pods, rawEvents, rawLogs, healthSamples] = await Promise.all([
       collectOrError(() =>
         this.kubernetesService.getDeploymentStatus(
           deployment.namespace,
@@ -39,19 +62,24 @@ export class EvidenceService {
         this.kubernetesService.getDeploymentEvidenceLogs(
           deployment.namespace,
           labels,
+          500,
+          sinceSeconds,
         ),
       ),
       this.prisma.deploymentHealthSample.findMany({
         where: {
           deploymentId: deployment.id,
           collectedAt: {
-            gte: minutesAgo(60),
+            gte: window.start,
+            lte: window.end,
           },
         },
         orderBy: { collectedAt: 'desc' },
         take: 120,
       }),
     ]);
+    const events = filterEventsByWindow(rawEvents, window);
+    const logs = filterLogsByWindow(rawLogs, window);
 
     const evidenceStatus = deriveEvidenceStatus(deployment.status, status);
 
@@ -59,7 +87,15 @@ export class EvidenceService {
       deploymentId: deployment.id,
       status: evidenceStatus,
       summary: buildEvidenceSummary(evidenceStatus, status, pods, events),
-      collectedAt,
+      collectedAt: collectedAt.toISOString(),
+      incidentWindow: {
+        triggeredAt: window.triggeredAt.toISOString(),
+        start: window.start.toISOString(),
+        end: window.end.toISOString(),
+        lookbackMinutes: window.lookbackMinutes,
+        lookaheadMinutes: window.lookaheadMinutes,
+        reason: window.reason,
+      },
       app: {
         id: deployment.app.id,
         name: deployment.app.name,
@@ -115,8 +151,11 @@ export class EvidenceService {
   }
 
   // Stores the current live evidence bundle as an RCA-ready snapshot.
-  async createSnapshot(deploymentId: string) {
-    const evidence = await this.collectLive(deploymentId);
+  async createSnapshot(
+    deploymentId: string,
+    windowOptions: EvidenceWindowOptions = {},
+  ) {
+    const evidence = await this.collectLive(deploymentId, windowOptions);
 
     return this.prisma.evidenceSnapshot.create({
       data: {
@@ -300,6 +339,106 @@ function getErrorMessage(error: unknown): string {
   return 'Unknown error';
 }
 
-function minutesAgo(minutes: number): Date {
-  return new Date(Date.now() - minutes * 60 * 1000);
+function buildEvidenceWindow(
+  options: EvidenceWindowOptions,
+  collectedAt: Date,
+): EvidenceWindow {
+  const lookbackMinutes = options.lookbackMinutes ?? 10;
+  const lookaheadMinutes = options.lookaheadMinutes ?? 2;
+  const triggeredAt = options.triggeredAt ?? collectedAt;
+  const start =
+    options.windowStart ??
+    new Date(triggeredAt.getTime() - lookbackMinutes * 60 * 1000);
+  const requestedEnd =
+    options.windowEnd ??
+    new Date(triggeredAt.getTime() + lookaheadMinutes * 60 * 1000);
+  const end =
+    requestedEnd.getTime() > collectedAt.getTime() ? collectedAt : requestedEnd;
+
+  return {
+    triggeredAt,
+    start,
+    end,
+    lookbackMinutes,
+    lookaheadMinutes,
+    reason: options.reason ?? 'manual-or-current-evidence',
+  };
+}
+
+function secondsBetween(start: Date, end: Date): number {
+  return Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 1000));
+}
+
+function filterEventsByWindow<T>(
+  events: T | { error: string },
+  window: EvidenceWindow,
+): T | { error: string } {
+  if (!Array.isArray(events)) {
+    return events;
+  }
+
+  return events.filter((event) => {
+    if (!isRecord(event)) {
+      return false;
+    }
+
+    const eventTime =
+      parseDateValue(event.eventTime) ??
+      parseDateValue(event.lastTimestamp) ??
+      parseDateValue(event.firstTimestamp);
+
+    return !eventTime || isWithinWindow(eventTime, window);
+  }) as T;
+}
+
+function filterLogsByWindow<T>(
+  podLogs: T | { error: string },
+  window: EvidenceWindow,
+): T | { error: string } {
+  if (!Array.isArray(podLogs)) {
+    return podLogs;
+  }
+
+  return podLogs.map((podLog) => {
+    if (!isRecord(podLog) || typeof podLog.logs !== 'string') {
+      return podLog;
+    }
+
+    return {
+      ...podLog,
+      logs: filterTimestampedLogLines(podLog.logs, window),
+    };
+  }) as T;
+}
+
+function filterTimestampedLogLines(logs: string, window: EvidenceWindow): string {
+  return logs
+    .split('\n')
+    .filter((line) => {
+      const timestamp = parseDateValue(line.split(/\s+/, 1)[0]);
+
+      return !timestamp || isWithinWindow(timestamp, window);
+    })
+    .join('\n');
+}
+
+function isWithinWindow(value: Date, window: EvidenceWindow): boolean {
+  return (
+    value.getTime() >= window.start.getTime() &&
+    value.getTime() <= window.end.getTime()
+  );
+}
+
+function parseDateValue(value: unknown): Date | undefined {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? undefined : value;
+  }
+
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime()) ? undefined : date;
 }

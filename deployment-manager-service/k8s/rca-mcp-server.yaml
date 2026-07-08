@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rca-mcp-server
+  namespace: deployment-manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rca-mcp-server-readonly
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rca-mcp-server-readonly
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: rca-mcp-server-readonly
+subjects:
+  - kind: ServiceAccount
+    name: rca-mcp-server
+    namespace: deployment-manager
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rca-mcp-server-config
+  namespace: deployment-manager
+data:
+  PORT: "8080"
+  DEFAULT_LOOKBACK_MINUTES: "10"
+  DEFAULT_LOOKAHEAD_MINUTES: "2"
+  KUBERNETES_IN_CLUSTER: "true"
+  PROMETHEUS_URL: "http://prometheus-server.observability.svc.cluster.local"
+  TEMPO_URL: "http://tempo.observability.svc.cluster.local:3100"
+  LOG_BACKEND_URL: "http://loki.observability.svc.cluster.local:3100"
+  MAX_RECURSION_DEPTH: "3"
+  MAX_LOG_LINES: "500"
+  MAX_SAMPLES: "120"
+  MAX_SPANS: "100"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rca-mcp-server
+  namespace: deployment-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rca-mcp-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rca-mcp-server
+    spec:
+      serviceAccountName: rca-mcp-server
+      containers:
+        - name: rca-mcp-server
+          image: rca-mcp-server:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: rca-mcp-server-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: deployment-manager-database
+                  key: DATABASE_URL
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rca-mcp-server
+  namespace: deployment-manager
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: rca-mcp-server
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

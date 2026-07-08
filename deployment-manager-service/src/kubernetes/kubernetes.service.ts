@@ -310,8 +310,9 @@ export class KubernetesService {
     namespace: string,
     labels: Record<string, string>,
     tailLines = 200,
+    sinceSeconds?: number,
   ): Promise<Array<{ podName: string; logs: string }>> {
-    return this.getPodLogsByLabels(namespace, labels, tailLines);
+    return this.getPodLogsByLabels(namespace, labels, tailLines, sinceSeconds);
   }
 
   // Deletes the Kubernetes resources that were created for a deployment.
@@ -656,6 +657,7 @@ export class KubernetesService {
     namespace: string,
     labels: Record<string, string>,
     tailLines?: number,
+    sinceSeconds?: number,
   ): Promise<Array<{ podName: string; logs: string }>> {
     const pods = await this.coreApi.listNamespacedPod(
       namespace,
@@ -683,7 +685,7 @@ export class KubernetesService {
           undefined,
           undefined,
           undefined,
-          undefined,
+          sinceSeconds,
           tailLines,
           true,
         );
