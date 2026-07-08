@@ -15,6 +15,7 @@ import (
 	"rca-mcp-server/internal/adapters"
 	"rca-mcp-server/internal/config"
 	rcacontext "rca-mcp-server/internal/context"
+	"rca-mcp-server/internal/services"
 	"rca-mcp-server/internal/store"
 	"rca-mcp-server/internal/tools"
 )
@@ -41,7 +42,7 @@ func main() {
 		logger.Warn("kubernetes adapter disabled", "error", err)
 	}
 
-	registry := tools.NewRegistry(tools.Dependencies{
+	serviceLayer := services.NewServices(services.Dependencies{
 		Config:         cfg,
 		ContextBuilder: rcacontext.NewBuilder(metadataStore, cfg),
 		Store:          metadataStore,
@@ -50,6 +51,11 @@ func main() {
 		Traces:         adapters.NewTempoAdapter(cfg),
 		Logs:           adapters.NewLogBackendAdapter(cfg),
 		Logger:         logger,
+	})
+
+	registry := tools.NewRegistry(tools.Dependencies{
+		Services: serviceLayer,
+		Logger:   logger,
 	})
 
 	mux := http.NewServeMux()

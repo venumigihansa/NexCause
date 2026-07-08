@@ -5,21 +5,12 @@ import (
 	"fmt"
 	"log/slog"
 
-	"rca-mcp-server/internal/adapters"
-	"rca-mcp-server/internal/config"
-	rcacontext "rca-mcp-server/internal/context"
-	"rca-mcp-server/internal/store"
+	"rca-mcp-server/internal/services"
 )
 
 type Dependencies struct {
-	Config         config.Config
-	ContextBuilder *rcacontext.Builder
-	Store          store.MetadataStore
-	Kubernetes     *adapters.KubernetesAdapter
-	Metrics        *adapters.PrometheusAdapter
-	Traces         *adapters.TempoAdapter
-	Logs           *adapters.LogBackendAdapter
-	Logger         *slog.Logger
+	Services *services.Services
+	Logger   *slog.Logger
 }
 
 type Registry struct {

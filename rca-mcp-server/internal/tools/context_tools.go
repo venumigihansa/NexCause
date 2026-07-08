@@ -7,9 +7,9 @@ import (
 )
 
 func (r *Registry) getRCAContext(ctx context.Context, args map[string]any) (rcacontext.RCAContext, error) {
-	runID, incidentID, err := requiredRunIncident(args)
+	req, err := evidenceRequest(args)
 	if err != nil {
 		return rcacontext.RCAContext{}, err
 	}
-	return r.deps.ContextBuilder.Build(ctx, runID, incidentID)
+	return r.deps.Services.Context.GetRCAContext(ctx, req)
 }
