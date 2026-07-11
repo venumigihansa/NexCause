@@ -178,6 +178,7 @@ model RcaRun {
   source             RcaRunSource
   result             Json?
   errorMessage       String?
+  agentThreads       RcaAgentThread[]
   startedAt          DateTime?
   completedAt        DateTime?
   createdAt          DateTime          @default(now())
@@ -187,6 +188,34 @@ model RcaRun {
   @@index([deploymentId])
   @@index([evidenceSnapshotId])
   @@index([status])
+}
+
+model RcaAgentThread {
+  id                  String           @id @default(cuid())
+  rcaRunId            String
+  rcaRun              RcaRun           @relation(fields: [rcaRunId], references: [id], onDelete: Cascade)
+  checkpointThreadId  String
+  status              String           @default("open")
+  messages            RcaChatMessage[]
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@unique([rcaRunId])
+  @@index([checkpointThreadId])
+  @@index([status])
+}
+
+model RcaChatMessage {
+  id        String         @id @default(cuid())
+  threadId  String
+  thread    RcaAgentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  role      String
+  content   String
+  metadata  Json?
+  createdAt DateTime       @default(now())
+
+  @@index([threadId, createdAt])
+  @@index([role])
 }
 
 model EvidenceSnapshot {

@@ -30,11 +30,11 @@ type Window struct {
 }
 
 type Signal struct {
-	Name       string                 `json:"name"`
-	Severity   string                 `json:"severity"`
-	Value      any                    `json:"value,omitempty"`
-	Reason     string                 `json:"reason,omitempty"`
-	Attributes map[string]any         `json:"attributes,omitempty"`
+	Name       string         `json:"name"`
+	Severity   string         `json:"severity"`
+	Value      any            `json:"value,omitempty"`
+	Reason     string         `json:"reason,omitempty"`
+	Attributes map[string]any `json:"attributes,omitempty"`
 }
 
 type CollectionError struct {
@@ -49,17 +49,17 @@ type Correlation struct {
 }
 
 type Bundle struct {
-	Source       Source            `json:"source"`
-	Scope        Scope             `json:"scope"`
-	Window       Window            `json:"window"`
-	Summary      string            `json:"summary"`
-	Signals      []Signal          `json:"signals"`
-	Samples      []any             `json:"samples"`
+	Source       Source             `json:"source"`
+	Scope        Scope              `json:"scope"`
+	Window       Window             `json:"window"`
+	Summary      string             `json:"summary"`
+	Signals      []Signal           `json:"signals"`
+	Samples      []any              `json:"samples"`
 	Stats        map[string]float64 `json:"stats,omitempty"`
-	Correlations []Correlation     `json:"correlations"`
-	Errors       []CollectionError `json:"errors"`
-	Truncated    bool              `json:"truncated"`
-	CollectedAt  string            `json:"collectedAt"`
+	Correlations []Correlation      `json:"correlations"`
+	Errors       []CollectionError  `json:"errors"`
+	Truncated    bool               `json:"truncated"`
+	CollectedAt  string             `json:"collectedAt"`
 }
 
 func NewBundle(source Source, scope Scope, start time.Time, end time.Time) Bundle {

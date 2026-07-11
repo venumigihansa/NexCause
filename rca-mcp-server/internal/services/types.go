@@ -20,12 +20,6 @@ type EvidenceRequest struct {
 	IncidentID string
 }
 
-type ExtractRequest struct {
-	EvidenceRequest
-	Focus string
-	Depth int
-}
-
 type Dependencies struct {
 	Config         config.Config
 	ContextBuilder *rcacontext.Builder
@@ -45,7 +39,6 @@ type Services struct {
 	Metrics    *MetricService
 	Traces     *TraceService
 	Store      *StoreService
-	Evidence   *EvidenceService
 }
 
 type serviceBase struct {
@@ -65,7 +58,6 @@ func NewServices(deps Dependencies) *Services {
 		Traces:     &TraceService{base: base},
 		Store:      &StoreService{base: base},
 	}
-	services.Evidence = &EvidenceService{services: services}
 	return services
 }
 

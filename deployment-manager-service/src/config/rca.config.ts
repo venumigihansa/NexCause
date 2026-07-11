@@ -13,4 +13,9 @@ export default () => ({
   rcaMcpServerUrl:
     process.env.RCA_MCP_SERVER_URL ??
     'http://rca-mcp-server.deployment-manager.svc.cluster.local/mcp',
+  rcaAgentServiceUrl:
+    process.env.RCA_AGENT_SERVICE_URL ??
+    'http://rca-agent-service.deployment-manager.svc.cluster.local',
+  rcaAgentEnabled: process.env.RCA_AGENT_ENABLED !== 'false',
+  rcaAgentTriggerMode: process.env.RCA_AGENT_TRIGGER_MODE ?? 'async',
 });

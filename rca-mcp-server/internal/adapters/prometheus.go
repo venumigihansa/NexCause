@@ -43,11 +43,11 @@ func (a *PrometheusAdapter) QueryDeploymentMetrics(ctx context.Context, namespac
 	}
 
 	queries := map[string]string{
-		"container_cpu_usage_seconds_total": fmt.Sprintf(`sum(rate(container_cpu_usage_seconds_total{namespace=%q,pod=~%q}[5m]))`, namespace, deploymentName+"-.*"),
-		"container_memory_working_set_bytes": fmt.Sprintf(`sum(container_memory_working_set_bytes{namespace=%q,pod=~%q})`, namespace, deploymentName+"-.*"),
+		"container_cpu_usage_seconds_total":        fmt.Sprintf(`sum(rate(container_cpu_usage_seconds_total{namespace=%q,pod=~%q}[5m]))`, namespace, deploymentName+"-.*"),
+		"container_memory_working_set_bytes":       fmt.Sprintf(`sum(container_memory_working_set_bytes{namespace=%q,pod=~%q})`, namespace, deploymentName+"-.*"),
 		"kube_pod_container_status_restarts_total": fmt.Sprintf(`sum(kube_pod_container_status_restarts_total{namespace=%q,pod=~%q})`, namespace, deploymentName+"-.*"),
-		"http_requests_error_rate": fmt.Sprintf(`sum(rate(http_server_requests_total{namespace=%q,status=~"5.."}[5m]))`, namespace),
-		"http_request_duration_p95": fmt.Sprintf(`histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{namespace=%q}[5m])) by (le))`, namespace),
+		"http_requests_error_rate":                 fmt.Sprintf(`sum(rate(http_server_requests_total{namespace=%q,status=~"5.."}[5m]))`, namespace),
+		"http_request_duration_p95":                fmt.Sprintf(`histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{namespace=%q}[5m])) by (le))`, namespace),
 	}
 
 	series := []MetricSeries{}
@@ -93,7 +93,7 @@ func (a *PrometheusAdapter) queryRange(ctx context.Context, query string, start 
 
 	var body struct {
 		Status string `json:"status"`
-		Data struct {
+		Data   struct {
 			Result []struct {
 				Metric map[string]string `json:"metric"`
 				Values [][]any           `json:"values"`

@@ -55,9 +55,9 @@ func Pods(scope evidence.Scope, start time.Time, end time.Time, pods []adapters.
 	bundle.Truncated = samples.truncated
 	bundle.Summary = fmt.Sprintf("Found %d pod(s), %d not-ready container(s), and %d total restart(s).", len(pods), notReady, totalRestarts)
 	bundle.Stats = map[string]float64{
-		"podCount":             float64(len(pods)),
-		"notReadyContainers":   float64(notReady),
-		"totalRestartCount":    float64(totalRestarts),
+		"podCount":           float64(len(pods)),
+		"notReadyContainers": float64(notReady),
+		"totalRestartCount":  float64(totalRestarts),
 	}
 	if notReady > 0 {
 		bundle.Signals = append(bundle.Signals, evidence.Signal{Name: "containers_not_ready", Severity: "warning", Value: notReady})

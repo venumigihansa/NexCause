@@ -39,7 +39,6 @@ func (r *Registry) ListTools() []ToolDefinition {
 		tool("get_health_samples", "Read and preprocess stored deployment health samples.", []string{"runId", "incidentId"}),
 		tool("get_runtime_configs", "Read and sanitize scoped runtime config metadata.", []string{"runId", "incidentId"}),
 		tool("get_recent_changes", "Read recent deployment/runtime changes for the scoped window.", []string{"runId", "incidentId"}),
-		tool("extract_evidence", "Run focused recursive evidence extraction over scoped telemetry.", []string{"runId", "incidentId"}),
 	}
 }
 
@@ -65,8 +64,6 @@ func (r *Registry) Call(ctx context.Context, name string, args map[string]any) (
 		return r.getRuntimeConfigs(ctx, args)
 	case "get_recent_changes":
 		return r.getRecentChanges(ctx, args)
-	case "extract_evidence":
-		return r.extractEvidence(ctx, args)
 	default:
 		return nil, fmt.Errorf("unknown tool %q", name)
 	}

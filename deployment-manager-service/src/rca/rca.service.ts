@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   IncidentSeverity,
@@ -10,6 +10,8 @@ import { PrismaService } from '../database/prisma.service';
 
 @Injectable()
 export class RcaService {
+  private readonly logger = new Logger(RcaService.name);
+
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
@@ -22,7 +24,7 @@ export class RcaService {
   ) {
     const incident = await this.findIncidentForRun(incidentId);
 
-    return this.prisma.rcaRun.create({
+    const run = await this.prisma.rcaRun.create({
       data: {
         incidentId: incident.id,
         deploymentId: incident.deploymentId,
@@ -34,6 +36,14 @@ export class RcaService {
         deployment: true,
       },
     });
+
+    this.triggerAgentRun(run.id, incident.id).catch((error) => {
+      this.logger.warn(
+        `Failed to trigger RCA agent for run ${run.id}: ${getErrorMessage(error)}`,
+      );
+    });
+
+    return run;
   }
 
   // Creates a manual incident for a deployment, then creates an RCA run for it.
@@ -112,9 +122,46 @@ export class RcaService {
       rcaEvidenceLookaheadMinutes:
         this.configService.get<number>('rcaEvidenceLookaheadMinutes') ?? 2,
       rcaMcpServerUrl: this.configService.get<string>('rcaMcpServerUrl'),
+      rcaAgentServiceUrl: this.configService.get<string>('rcaAgentServiceUrl'),
+      rcaAgentEnabled:
+        this.configService.get<boolean>('rcaAgentEnabled') ?? true,
+      rcaAgentTriggerMode:
+        this.configService.get<string>('rcaAgentTriggerMode') ?? 'async',
       placeholderEngine: false,
       evidenceContextPersistence: 'none',
     };
+  }
+
+  private async triggerAgentRun(
+    runId: string,
+    incidentId: string,
+  ): Promise<void> {
+    const enabled = this.configService.get<boolean>('rcaAgentEnabled') ?? true;
+    const triggerMode =
+      this.configService.get<string>('rcaAgentTriggerMode') ?? 'async';
+
+    if (!enabled || triggerMode !== 'async') {
+      return;
+    }
+
+    const baseUrl = this.configService.get<string>('rcaAgentServiceUrl');
+    if (!baseUrl) {
+      this.logger.warn('RCA agent service URL is not configured');
+      return;
+    }
+
+    const response = await fetch(`${baseUrl}/rca-agent/runs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ runId, incidentId }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(
+        `RCA agent returned ${response.status} ${response.statusText}: ${body}`,
+      );
+    }
   }
 
   private async ensureIncidentExists(incidentId: string): Promise<void> {
@@ -143,6 +190,10 @@ export class RcaService {
 
     return incident;
   }
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function normalizeRcaRunSource(

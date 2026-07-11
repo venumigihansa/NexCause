@@ -24,20 +24,20 @@ type KubernetesAdapter struct {
 }
 
 type K8sDeploymentStatus struct {
-	DesiredReplicas     int               `json:"desiredReplicas"`
-	ReadyReplicas       int               `json:"readyReplicas"`
-	AvailableReplicas   int               `json:"availableReplicas"`
-	UpdatedReplicas     int               `json:"updatedReplicas"`
-	UnavailableReplicas int               `json:"unavailableReplicas"`
-	Conditions          []map[string]any  `json:"conditions"`
+	DesiredReplicas     int              `json:"desiredReplicas"`
+	ReadyReplicas       int              `json:"readyReplicas"`
+	AvailableReplicas   int              `json:"availableReplicas"`
+	UpdatedReplicas     int              `json:"updatedReplicas"`
+	UnavailableReplicas int              `json:"unavailableReplicas"`
+	Conditions          []map[string]any `json:"conditions"`
 }
 
 type K8sPod struct {
-	Name       string         `json:"name"`
-	Phase      string         `json:"phase"`
-	NodeName   string         `json:"nodeName,omitempty"`
-	StartedAt  *time.Time     `json:"startedAt,omitempty"`
-	Containers []K8sContainer `json:"containers"`
+	Name       string           `json:"name"`
+	Phase      string           `json:"phase"`
+	NodeName   string           `json:"nodeName,omitempty"`
+	StartedAt  *time.Time       `json:"startedAt,omitempty"`
+	Containers []K8sContainer   `json:"containers"`
 	Conditions []map[string]any `json:"conditions"`
 }
 
@@ -45,8 +45,8 @@ type K8sContainer struct {
 	Name         string         `json:"name"`
 	Ready        bool           `json:"ready"`
 	RestartCount int            `json:"restartCount"`
-	State        map[string]any  `json:"state,omitempty"`
-	LastState    map[string]any  `json:"lastState,omitempty"`
+	State        map[string]any `json:"state,omitempty"`
+	LastState    map[string]any `json:"lastState,omitempty"`
 }
 
 type K8sEvent struct {
@@ -135,14 +135,14 @@ func (a *KubernetesAdapter) Pods(ctx context.Context, namespace string, appID st
 				Name string `json:"name"`
 			} `json:"metadata"`
 			Status struct {
-				Phase      string         `json:"phase"`
-				NodeName   string         `json:"nodeName"`
-				StartTime  *time.Time     `json:"startTime"`
-				Conditions []map[string]any `json:"conditions"`
+				Phase             string           `json:"phase"`
+				NodeName          string           `json:"nodeName"`
+				StartTime         *time.Time       `json:"startTime"`
+				Conditions        []map[string]any `json:"conditions"`
 				ContainerStatuses []struct {
-					Name         string        `json:"name"`
-					Ready        bool          `json:"ready"`
-					RestartCount int           `json:"restartCount"`
+					Name         string         `json:"name"`
+					Ready        bool           `json:"ready"`
+					RestartCount int            `json:"restartCount"`
 					State        map[string]any `json:"state"`
 					LastState    map[string]any `json:"lastState"`
 				} `json:"containerStatuses"`

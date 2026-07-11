@@ -16,7 +16,6 @@ The server does not persist RCA context, raw telemetry, or MCP tool output.
 - `get_health_samples`
 - `get_runtime_configs`
 - `get_recent_changes`
-- `extract_evidence`
 
 ## Minimal MCP Call
 
@@ -26,12 +25,10 @@ The server does not persist RCA context, raw telemetry, or MCP tool output.
   "id": 1,
   "method": "tools/call",
   "params": {
-    "name": "extract_evidence",
+    "name": "get_rca_context",
     "arguments": {
       "runId": "rca-run-id",
-      "incidentId": "incident-id",
-      "focus": "overview",
-      "depth": 1
+      "incidentId": "incident-id"
     }
   }
 }

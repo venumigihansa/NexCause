@@ -23,11 +23,11 @@ func NewPostgresStore(db *sql.DB) *PostgresStore {
 }
 
 type RCAContextRecord struct {
-	Run                            RunRecord
-	Incident                       IncidentRecord
-	Deployment                     DeploymentRecord
-	App                            AppRecord
-	LatestHealthSampleCollectedAt  *time.Time
+	Run                           RunRecord
+	Incident                      IncidentRecord
+	Deployment                    DeploymentRecord
+	App                           AppRecord
+	LatestHealthSampleCollectedAt *time.Time
 }
 
 type RunRecord struct {

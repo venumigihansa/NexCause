@@ -71,13 +71,13 @@ func (a *TempoAdapter) QueryDeploymentTraces(ctx context.Context, serviceName st
 
 	var body struct {
 		Traces []struct {
-			TraceID           string            `json:"traceID"`
-			RootServiceName   string            `json:"rootServiceName"`
-			RootTraceName     string            `json:"rootTraceName"`
-			DurationMs        float64           `json:"durationMs"`
-			ServiceStats      map[string]any     `json:"serviceStats"`
-			SpanSet           map[string]any     `json:"spanSet"`
-			Attributes        map[string]string  `json:"attributes"`
+			TraceID         string            `json:"traceID"`
+			RootServiceName string            `json:"rootServiceName"`
+			RootTraceName   string            `json:"rootTraceName"`
+			DurationMs      float64           `json:"durationMs"`
+			ServiceStats    map[string]any    `json:"serviceStats"`
+			SpanSet         map[string]any    `json:"spanSet"`
+			Attributes      map[string]string `json:"attributes"`
 		} `json:"traces"`
 	}
 	if err := json.Unmarshal(data, &body); err != nil {

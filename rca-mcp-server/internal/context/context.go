@@ -36,13 +36,13 @@ type Window struct {
 }
 
 type Constraints struct {
-	ReadOnly            bool   `json:"readOnly"`
-	Persistence         string `json:"persistence"`
-	MaxRecursionDepth   int    `json:"maxRecursionDepth"`
-	MaxLogLines         int    `json:"maxLogLines"`
-	MaxSamples          int    `json:"maxSamples"`
-	MaxSpans            int    `json:"maxSpans"`
-	RedactSecrets       bool   `json:"redactSecrets"`
+	ReadOnly          bool   `json:"readOnly"`
+	Persistence       string `json:"persistence"`
+	MaxRecursionDepth int    `json:"maxRecursionDepth"`
+	MaxLogLines       int    `json:"maxLogLines"`
+	MaxSamples        int    `json:"maxSamples"`
+	MaxSpans          int    `json:"maxSpans"`
+	RedactSecrets     bool   `json:"redactSecrets"`
 }
 
 type RCAContext struct {

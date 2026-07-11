@@ -72,10 +72,10 @@ func lokiQuery(namespace string, deploymentName string) string {
 func parseLokiLogs(data []byte, fallbackName string) ([]PodLog, error) {
 	var body struct {
 		Status string `json:"status"`
-		Data struct {
+		Data   struct {
 			Result []struct {
 				Stream map[string]string `json:"stream"`
-				Values [][]string         `json:"values"`
+				Values [][]string        `json:"values"`
 			} `json:"result"`
 		} `json:"data"`
 	}
