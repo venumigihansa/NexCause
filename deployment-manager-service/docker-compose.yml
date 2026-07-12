@@ -1,15 +1,141 @@
+name: rca-platform
+
 services:
   postgres:
     image: postgres:17
-    container_name: deployment-manager-postgres
     environment:
-      POSTGRES_USER: deployment_manager
-      POSTGRES_PASSWORD: deployment_manager
-      POSTGRES_DB: deployment_manager
+      POSTGRES_USER: ${POSTGRES_USER:-deployment_manager}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-deployment_manager}
+      POSTGRES_DB: ${POSTGRES_DB:-deployment_manager}
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  database-migration:
+    image: rca-platform/deployment-manager:${IMAGE_TAG:-dev}
+    build:
+      context: .
+      args:
+        VERSION: ${IMAGE_VERSION:-dev}
+        VCS_REF: ${VCS_REF:-unknown}
+    command: ["npm", "run", "prisma:migrate:deploy"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-deployment_manager}:${POSTGRES_PASSWORD:-deployment_manager}@postgres:5432/${POSTGRES_DB:-deployment_manager}?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    restart: "no"
+
+  deployment-manager:
+    image: rca-platform/deployment-manager:${IMAGE_TAG:-dev}
+    build:
+      context: .
+      args:
+        VERSION: ${IMAGE_VERSION:-dev}
+        VCS_REF: ${VCS_REF:-unknown}
+    environment:
+      PORT: "3000"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-deployment_manager}:${POSTGRES_PASSWORD:-deployment_manager}@postgres:5432/${POSTGRES_DB:-deployment_manager}?schema=public
+      DEFAULT_KUBERNETES_NAMESPACE: apps
+      LOCAL_REGISTRY_HOST: localhost:5001
+      LOCAL_REGISTRY_CLUSTER: kind-registry:5000
+      BUILDPACK_BUILDER_IMAGE: gcr.io/buildpacks/builder
+      BUILDPACK_RUNNER_IMAGE: localhost:5001/deployment-manager-buildpack-runner:dev
+      OBSERVABILITY_ENABLED: "false"
+      INCIDENT_DETECTION_ENABLED: "false"
+      AUTO_RCA_ENABLED: "false"
+      RCA_MCP_SERVER_URL: http://rca-mcp-server:8080/mcp
+      RCA_AGENT_SERVICE_URL: http://rca-agent-service:8080
+      RCA_AGENT_ENABLED: "true"
+      RCA_AGENT_TRIGGER_MODE: async
+    ports:
+      - "3000:3000"
+    depends_on:
+      database-migration:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    init: true
+
+  rca-mcp-server:
+    image: rca-platform/mcp-server:${IMAGE_TAG:-dev}
+    build:
+      context: ../rca-mcp-server
+      args:
+        VERSION: ${IMAGE_VERSION:-dev}
+        VCS_REF: ${VCS_REF:-unknown}
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-deployment_manager}:${POSTGRES_PASSWORD:-deployment_manager}@postgres:5432/${POSTGRES_DB:-deployment_manager}?schema=public
+      KUBERNETES_IN_CLUSTER: "false"
+      PROMETHEUS_URL: ""
+      TEMPO_URL: ""
+      LOG_BACKEND_URL: ""
+    ports:
+      - "8080:8080"
+    depends_on:
+      database-migration:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/rca-mcp-server", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    init: true
+
+  rca-agent-service:
+    image: rca-platform/rca-agent:${IMAGE_TAG:-dev}
+    build:
+      context: ../rca-agent-service
+      args:
+        VERSION: ${IMAGE_VERSION:-dev}
+        VCS_REF: ${VCS_REF:-unknown}
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-deployment_manager}:${POSTGRES_PASSWORD:-deployment_manager}@postgres:5432/${POSTGRES_DB:-deployment_manager}?schema=public
+      RCA_MCP_SERVER_URL: http://rca-mcp-server:8080/mcp
+      RCA_AGENT_POLL_ENABLED: "false"
+      RCA_LLM_PROVIDER: ${RCA_LLM_PROVIDER:-gemini}
+      RCA_LLM_MODEL: ${RCA_LLM_MODEL:-gemini-1.5-flash}
+      RCA_LLM_API_KEY: ${RCA_LLM_API_KEY:-}
+    ports:
+      - "8081:8080"
+    depends_on:
+      database-migration:
+        condition: service_completed_successfully
+      rca-mcp-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+    init: true
 
 volumes:
   postgres-data:

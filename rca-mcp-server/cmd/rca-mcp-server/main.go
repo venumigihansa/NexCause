@@ -20,9 +20,20 @@ import (
 	"rca-mcp-server/internal/tools"
 )
 
+var (
+	version  = "dev"
+	revision = "unknown"
+)
+
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "healthcheck" {
+		runHealthcheck()
+		return
+	}
+
 	cfg := config.Load()
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger.Info("starting RCA MCP server", "version", version, "revision", revision)
 
 	db, err := sql.Open("postgres", cfg.DatabaseURL)
 	if err != nil {
@@ -88,6 +99,24 @@ func main() {
 
 	if err := server.Shutdown(ctx); err != nil {
 		logger.Error("server shutdown failed", "error", err)
+		os.Exit(1)
+	}
+}
+
+func runHealthcheck() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	response, err := client.Get("http://127.0.0.1:" + port + "/healthz")
+	if err != nil {
+		os.Exit(1)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
 		os.Exit(1)
 	}
 }
