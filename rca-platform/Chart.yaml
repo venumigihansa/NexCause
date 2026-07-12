@@ -1,0 +1,24 @@
+apiVersion: v2
+name: rca-platform
+description: RCA Platform application and local infrastructure
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies:
+  - name: deployment-manager
+    version: 0.1.0
+    repository: file://charts/deployment-manager
+  - name: rca-agent
+    version: 0.1.0
+    repository: file://charts/rca-agent
+  - name: mcp-server
+    version: 0.1.0
+    repository: file://charts/mcp-server
+  - name: postgres
+    version: 0.1.0
+    repository: file://charts/postgres
+    condition: postgres.enabled
+  - name: registry
+    version: 0.1.0
+    repository: file://charts/registry
+    condition: registry.enabled

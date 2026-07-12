@@ -1,0 +1,11 @@
+replicaCount: 1
+image: { repository: rca-platform/mcp-server, tag: dev, pullPolicy: IfNotPresent }
+service: { type: ClusterIP, port: 80 }
+config: {}
+resources:
+  requests: { cpu: 50m, memory: 64Mi }
+  limits: { cpu: 500m, memory: 256Mi }
+podAnnotations: {}
+containerSecurityContext:
+  runAsUser: 65532
+  runAsGroup: 65532

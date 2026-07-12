@@ -1,0 +1,12 @@
+replicaCount: 1
+image: { repository: rca-platform/rca-agent, tag: dev, pullPolicy: IfNotPresent }
+service: { type: ClusterIP, port: 80 }
+existingSecret: { name: "", llmApiKeyKey: RCA_LLM_API_KEY }
+config: {}
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits: { cpu: "1", memory: 1Gi }
+podAnnotations: {}
+containerSecurityContext:
+  runAsUser: 100
+  runAsGroup: 101

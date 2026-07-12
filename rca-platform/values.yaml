@@ -1,0 +1,83 @@
+global:
+  database:
+    secretName: ""
+    secretKey: DATABASE_URL
+    bundled: false
+  imagePullSecrets: []
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+
+deployment-manager:
+  image:
+    repository: rca-platform/deployment-manager
+    tag: dev
+    pullPolicy: IfNotPresent
+  migration:
+    enabled: true
+  config:
+    DEFAULT_KUBERNETES_NAMESPACE: apps
+    OBSERVABILITY_ENABLED: "false"
+    INCIDENT_DETECTION_ENABLED: "false"
+    AUTO_RCA_ENABLED: "false"
+    RCA_AGENT_ENABLED: "true"
+    RCA_AGENT_TRIGGER_MODE: async
+
+rca-agent:
+  image:
+    repository: rca-platform/rca-agent
+    tag: dev
+    pullPolicy: IfNotPresent
+  existingSecret:
+    name: ""
+    llmApiKeyKey: RCA_LLM_API_KEY
+  config:
+    RCA_AGENT_POLL_ENABLED: "true"
+    RCA_AGENT_POLL_INTERVAL_SECONDS: "10"
+    RCA_LLM_PROVIDER: gemini
+    RCA_LLM_MODEL: gemini-1.5-flash
+
+mcp-server:
+  image:
+    repository: rca-platform/mcp-server
+    tag: dev
+    pullPolicy: IfNotPresent
+  config:
+    KUBERNETES_IN_CLUSTER: "true"
+    DEFAULT_LOOKBACK_MINUTES: "10"
+    DEFAULT_LOOKAHEAD_MINUTES: "2"
+    MAX_RECURSION_DEPTH: "3"
+    MAX_LOG_LINES: "500"
+    MAX_SAMPLES: "120"
+    MAX_SPANS: "100"
+    PROMETHEUS_URL: ""
+    TEMPO_URL: ""
+    LOG_BACKEND_URL: ""
+
+postgres:
+  enabled: false
+  auth:
+    username: deployment_manager
+    password: ""
+    database: deployment_manager
+  persistence:
+    enabled: true
+    size: 8Gi
+    storageClass: ""
+
+registry:
+  enabled: false
+  service:
+    type: ClusterIP
+    port: 5000
+    nodePort: null
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "deployment-manager.fullname" . }}
+  labels:
+    {{- include "deployment-manager.labels" . | nindent 4 }}
+data:
+  PORT: "3000"
+  RCA_MCP_SERVER_URL: {{ printf "http://%s-mcp-server/mcp" .Release.Name | quote }}
+  RCA_AGENT_SERVICE_URL: {{ printf "http://%s-rca-agent" .Release.Name | quote }}
+  {{- if .Values.localRegistry.enabled }}
+  LOCAL_REGISTRY_CLUSTER: {{ printf "%s-registry:%v" .Release.Name .Values.localRegistry.port | quote }}
+  {{- end }}
+  {{- range $key, $value := .Values.config }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}

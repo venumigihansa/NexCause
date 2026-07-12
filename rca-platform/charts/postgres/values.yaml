@@ -1,0 +1,8 @@
+enabled: false
+image: { repository: postgres, tag: "17", pullPolicy: IfNotPresent }
+auth: { username: deployment_manager, password: "", database: deployment_manager }
+service: { port: 5432 }
+persistence: { enabled: true, size: 8Gi, storageClass: "" }
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits: { cpu: 500m, memory: 512Mi }

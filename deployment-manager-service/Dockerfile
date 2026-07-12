@@ -1,5 +1,8 @@
 FROM node:22-bookworm-slim AS build
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY src/database/prisma ./src/database/prisma
@@ -11,6 +14,9 @@ RUN npm run build
 
 FROM node:22-bookworm-slim AS production-dependencies
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY src/database/prisma ./src/database/prisma
@@ -18,6 +24,9 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 FROM node:22-bookworm-slim AS runtime
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/*
 ARG VERSION=dev
 ARG VCS_REF=unknown
 LABEL org.opencontainers.image.title="RCA Platform Deployment Manager" \

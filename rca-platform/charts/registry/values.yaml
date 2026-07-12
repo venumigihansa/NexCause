@@ -1,0 +1,7 @@
+enabled: false
+image: { repository: registry, tag: "2", pullPolicy: IfNotPresent }
+service: { type: ClusterIP, port: 5000, nodePort: null }
+persistence: { enabled: true, size: 10Gi, storageClass: "" }
+resources:
+  requests: { cpu: 50m, memory: 64Mi }
+  limits: { cpu: 500m, memory: 256Mi }

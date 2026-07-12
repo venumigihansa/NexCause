@@ -1,0 +1,26 @@
+replicaCount: 1
+image:
+  repository: rca-platform/deployment-manager
+  tag: dev
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 80
+  nodePort: null
+migration:
+  enabled: true
+  backoffLimit: 3
+localRegistry:
+  enabled: false
+  port: 5000
+config: {}
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits: { cpu: 500m, memory: 512Mi }
+podAnnotations: {}
+containerSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+nodeSelector: {}
+tolerations: []
+affinity: {}

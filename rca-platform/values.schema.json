@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "global": {
+      "type": "object",
+      "required": ["database"],
+      "properties": {
+        "database": {
+          "type": "object",
+          "required": ["secretName", "secretKey"],
+          "properties": {
+            "secretName": { "type": "string" },
+            "secretKey": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "postgres": { "type": "object" },
+    "registry": { "type": "object" }
+  }
+}

@@ -1,0 +1,47 @@
+global:
+  database:
+    bundled: true
+
+postgres:
+  enabled: true
+  auth:
+    username: deployment_manager
+    password: deployment_manager
+    database: deployment_manager
+  persistence:
+    enabled: true
+    size: 2Gi
+    storageClass: standard
+
+registry:
+  enabled: true
+  service:
+    type: NodePort
+    port: 5000
+    nodePort: 30500
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: standard
+
+deployment-manager:
+  localRegistry:
+    enabled: true
+    port: 5000
+  service:
+    type: NodePort
+    nodePort: 30300
+  config:
+    DEFAULT_KUBERNETES_NAMESPACE: apps
+    LOCAL_REGISTRY_HOST: localhost:30500
+    BUILDPACK_BUILDER_IMAGE: gcr.io/buildpacks/builder
+    BUILDPACK_RUNNER_IMAGE: localhost:30500/deployment-manager-buildpack-runner:dev
+    OBSERVABILITY_ENABLED: "false"
+    INCIDENT_DETECTION_ENABLED: "false"
+    AUTO_RCA_ENABLED: "false"
+    RCA_AGENT_ENABLED: "true"
+    RCA_AGENT_TRIGGER_MODE: async
+
+rca-agent:
+  config:
+    RCA_AGENT_POLL_ENABLED: "false"
