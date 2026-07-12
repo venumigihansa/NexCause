@@ -8,6 +8,10 @@ data:
   PORT: "3000"
   RCA_MCP_SERVER_URL: {{ printf "http://%s-mcp-server/mcp" .Release.Name | quote }}
   RCA_AGENT_SERVICE_URL: {{ printf "http://%s-rca-agent" .Release.Name | quote }}
+  {{- if .Values.global.observability.enabled }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://rca-observability-otel:4318"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+  {{- end }}
   {{- if .Values.localRegistry.enabled }}
   LOCAL_REGISTRY_CLUSTER: {{ printf "%s-registry:%v" .Release.Name .Values.localRegistry.port | quote }}
   {{- end }}

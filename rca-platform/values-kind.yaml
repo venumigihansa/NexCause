@@ -45,3 +45,19 @@ deployment-manager:
 rca-agent:
   config:
     RCA_AGENT_POLL_ENABLED: "false"
+
+prometheus:
+  server:
+    retention: 1h
+    persistentVolume: { enabled: true, size: 2Gi, storageClass: standard }
+
+loki:
+  singleBinary:
+    persistence: { enabled: true, size: 2Gi, storageClass: standard }
+
+tempo:
+  tempo: { retention: 1h }
+  persistence: { enabled: true, size: 2Gi, storageClassName: standard }
+
+grafana:
+  persistence: { enabled: true, size: 1Gi, storageClassName: standard }

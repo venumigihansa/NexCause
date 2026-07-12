@@ -47,6 +47,16 @@ Access the API with port forwarding, which works regardless of Kind port mapping
 kubectl port-forward -n rca-platform svc/rca-platform-deployment-manager 3000:80
 ```
 
+The Kind profile also installs the shared OpenTelemetry Collector, Prometheus, Loki, Tempo, and Grafana. Access Grafana with:
+
+```bash
+kubectl port-forward -n rca-platform svc/rca-observability-grafana 3001:80
+kubectl get secret -n rca-platform rca-observability-grafana \
+  -o jsonpath='{.data.admin-password}' | base64 --decode
+```
+
+Sign in as `admin`. Prometheus, Loki, and Tempo are provisioned as data sources and the `RCA Platform Overview` dashboard is installed automatically.
+
 ## Database migrations
 
 The deployment-manager image contains the Prisma CLI and checked-in migrations. Helm runs it as a Kubernetes Job using `post-install` for a fresh install, because bundled Postgres must exist first, and `pre-upgrade` for later releases. A failed migration fails the Helm operation. Successful hook Jobs are deleted automatically.

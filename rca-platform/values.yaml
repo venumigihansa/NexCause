@@ -4,6 +4,8 @@ global:
     secretKey: DATABASE_URL
     bundled: false
   imagePullSecrets: []
+  observability:
+    enabled: true
   podSecurityContext:
     runAsNonRoot: true
     seccompProfile:
@@ -23,7 +25,7 @@ deployment-manager:
     enabled: true
   config:
     DEFAULT_KUBERNETES_NAMESPACE: apps
-    OBSERVABILITY_ENABLED: "false"
+    OBSERVABILITY_ENABLED: "true"
     INCIDENT_DETECTION_ENABLED: "false"
     AUTO_RCA_ENABLED: "false"
     RCA_AGENT_ENABLED: "true"
@@ -56,9 +58,151 @@ mcp-server:
     MAX_LOG_LINES: "500"
     MAX_SAMPLES: "120"
     MAX_SPANS: "100"
-    PROMETHEUS_URL: ""
-    TEMPO_URL: ""
-    LOG_BACKEND_URL: ""
+
+observability:
+  enabled: true
+
+prometheus:
+  alertmanager: { enabled: false }
+  prometheus-pushgateway: { enabled: false }
+  prometheus-node-exporter: { enabled: false }
+  server:
+    fullnameOverride: rca-observability-prometheus
+    retention: 24h
+    persistentVolume:
+      enabled: true
+      size: 8Gi
+    resources:
+      requests: { cpu: 200m, memory: 256Mi }
+      limits: { cpu: "1", memory: 1Gi }
+  extraScrapeConfigs: |
+    - job_name: otel-collector
+      scrape_interval: 15s
+      static_configs:
+        - targets: [rca-observability-otel:8889]
+
+loki:
+  fullnameOverride: rca-observability-loki
+  deploymentMode: SingleBinary
+  loki:
+    auth_enabled: false
+    commonConfig: { replication_factor: 1 }
+    storage: { type: filesystem }
+    schemaConfig:
+      configs:
+        - from: "2024-01-01"
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index: { prefix: loki_index_, period: 24h }
+  singleBinary:
+    replicas: 1
+    persistence: { enabled: true, size: 8Gi }
+  read: { replicas: 0 }
+  write: { replicas: 0 }
+  backend: { replicas: 0 }
+  gateway: { enabled: false }
+  chunksCache: { enabled: false }
+  resultsCache: { enabled: false }
+  test: { enabled: false }
+  lokiCanary: { enabled: false }
+
+tempo:
+  fullnameOverride: rca-observability-tempo
+  tempo:
+    retention: 24h
+    receivers:
+      otlp:
+        protocols:
+          grpc: { endpoint: 0.0.0.0:4317 }
+          http: { endpoint: 0.0.0.0:4318 }
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { cpu: 500m, memory: 768Mi }
+  persistence: { enabled: true, size: 8Gi }
+
+opentelemetry-collector:
+  fullnameOverride: rca-observability-otel
+  mode: deployment
+  presets:
+    kubernetesAttributes: { enabled: true }
+  image: { repository: otel/opentelemetry-collector-contrib }
+  service: { type: ClusterIP }
+  ports:
+    otlp: { enabled: true, containerPort: 4317, servicePort: 4317, protocol: TCP }
+    otlp-http: { enabled: true, containerPort: 4318, servicePort: 4318, protocol: TCP }
+    prometheus: { enabled: true, containerPort: 8889, servicePort: 8889, protocol: TCP }
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc: { endpoint: '${env:MY_POD_IP}:4317' }
+          http: { endpoint: '${env:MY_POD_IP}:4318' }
+    processors:
+      memory_limiter: { check_interval: 1s, limit_percentage: 75, spike_limit_percentage: 20 }
+      batch: {}
+      k8sattributes: {}
+    exporters:
+      otlp/tempo: { endpoint: rca-observability-tempo:4317, tls: { insecure: true } }
+      prometheus: { endpoint: '${env:MY_POD_IP}:8889' }
+      otlphttp/loki: { endpoint: http://rca-observability-loki:3100/otlp }
+    service:
+      pipelines:
+        traces: { receivers: [otlp], processors: [memory_limiter, k8sattributes, batch], exporters: [otlp/tempo] }
+        metrics: { receivers: [otlp], processors: [memory_limiter, k8sattributes, batch], exporters: [prometheus] }
+        logs: { receivers: [otlp], processors: [memory_limiter, k8sattributes, batch], exporters: [otlphttp/loki] }
+
+grafana:
+  fullnameOverride: rca-observability-grafana
+  deploymentStrategy:
+    type: Recreate
+  adminUser: admin
+  adminPassword: ""
+  persistence: { enabled: true, size: 5Gi }
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - { name: Prometheus, uid: prometheus, type: prometheus, url: http://rca-observability-prometheus, access: proxy, isDefault: true, editable: false }
+        - { name: Loki, uid: loki, type: loki, url: http://rca-observability-loki:3100, access: proxy, editable: false }
+        - { name: Tempo, uid: tempo, type: tempo, url: http://rca-observability-tempo:3200, access: proxy, editable: false }
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: rca-platform
+          orgId: 1
+          folder: RCA Platform
+          type: file
+          disableDeletion: true
+          editable: false
+          options: { path: /var/lib/grafana/dashboards/rca-platform }
+  dashboards:
+    rca-platform:
+      overview:
+        json: |
+          {
+            "annotations":{"list":[]},
+            "editable":false,
+            "panels":[
+              {"type":"timeseries","title":"Container CPU","datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(rate(container_cpu_usage_seconds_total{namespace=~\"apps|rca-platform\"}[5m])) by (namespace)","legendFormat":"{{namespace}}"}],"gridPos":{"h":8,"w":12,"x":0,"y":0}},
+              {"type":"timeseries","title":"Pod Restarts","datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(kube_pod_container_status_restarts_total) by (namespace)","legendFormat":"{{namespace}}"}],"gridPos":{"h":8,"w":12,"x":12,"y":0}},
+              {"type":"logs","title":"Managed Application Logs","datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{service_namespace=~\"apps|rca-platform\"}"}],"gridPos":{"h":10,"w":24,"x":0,"y":8}}
+            ],
+            "schemaVersion":41,
+            "tags":["rca-platform"],
+            "templating":{"list":[]},
+            "time":{"from":"now-1h","to":"now"},
+            "title":"RCA Platform Overview",
+            "uid":"rca-platform-overview",
+            "version":1
+          }
 
 postgres:
   enabled: false

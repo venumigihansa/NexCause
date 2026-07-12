@@ -1,0 +1,33 @@
+dependencies:
+- name: deployment-manager
+  repository: file://charts/deployment-manager
+  version: 0.1.0
+- name: rca-agent
+  repository: file://charts/rca-agent
+  version: 0.1.0
+- name: mcp-server
+  repository: file://charts/mcp-server
+  version: 0.1.0
+- name: postgres
+  repository: file://charts/postgres
+  version: 0.1.0
+- name: registry
+  repository: file://charts/registry
+  version: 0.1.0
+- name: prometheus
+  repository: https://prometheus-community.github.io/helm-charts
+  version: 29.17.0
+- name: loki
+  repository: https://grafana.github.io/helm-charts
+  version: 7.0.0
+- name: tempo
+  repository: https://grafana.github.io/helm-charts
+  version: 1.24.4
+- name: grafana
+  repository: https://grafana.github.io/helm-charts
+  version: 10.5.15
+- name: opentelemetry-collector
+  repository: https://open-telemetry.github.io/opentelemetry-helm-charts
+  version: 0.165.0
+digest: sha256:8acaf14c7a592ae8a9a5e8714fad3b010c601ba1d36affc245fa59123b09d15a
+generated: "2026-07-13T02:32:29.881076+05:30"
