@@ -20,10 +20,10 @@ kind load docker-image --name rca-lab \
   rca-platform/rca-agent:dev \
   rca-platform/mcp-server:dev
 
-helm upgrade --install rca-platform ./rca-platform \
+helm upgrade --install rca-platform ./deployments \
   --namespace rca-platform \
   --create-namespace \
-  -f ./rca-platform/values-kind.yaml \
+  -f ./deployments/values-kind.yaml \
   --wait --timeout 5m
 ```
 
@@ -34,9 +34,9 @@ kubectl create secret generic rca-platform-agent \
   --namespace rca-platform \
   --from-literal=RCA_LLM_API_KEY='<key>'
 
-helm upgrade rca-platform ./rca-platform \
+helm upgrade rca-platform ./deployments \
   --namespace rca-platform \
-  -f ./rca-platform/values-kind.yaml \
+  -f ./deployments/values-kind.yaml \
   --set rca-agent.existingSecret.name=rca-platform-agent \
   --wait
 ```
@@ -68,8 +68,8 @@ Bundled Postgres and the local registry are disabled by default and in `values-p
 ## Validation
 
 ```bash
-helm lint ./rca-platform -f ./rca-platform/values-kind.yaml
-helm template rca-platform ./rca-platform \
+helm lint ./deployments -f ./deployments/values-kind.yaml
+helm template rca-platform ./deployments \
   --namespace rca-platform \
-  -f ./rca-platform/values-kind.yaml
+  -f ./deployments/values-kind.yaml
 ```
