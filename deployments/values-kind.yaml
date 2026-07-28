@@ -2,6 +2,19 @@ global:
   database:
     bundled: true
 
+gateway:
+  enabled: true
+  deploymentManagerHostname: manager.rca.local
+  applicationWildcardHostname: "*.apps.rca.local"
+  tls:
+    issuerRef:
+      group: cert-manager.io
+      kind: Issuer
+      name: rca-local-selfsigned
+    localIssuer:
+      enabled: true
+      name: rca-local-selfsigned
+
 postgres:
   enabled: true
   auth:
@@ -29,8 +42,8 @@ deployment-manager:
     enabled: true
     port: 5000
   service:
-    type: NodePort
-    nodePort: 30300
+    type: ClusterIP
+    nodePort: null
   config:
     DEFAULT_KUBERNETES_NAMESPACE: apps
     LOCAL_REGISTRY_HOST: localhost:30500

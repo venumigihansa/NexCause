@@ -1,0 +1,25 @@
+{{- if and .Values.gateway.enabled .Values.gateway.aws.enabled }}
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: GatewayParameters
+metadata:
+  name: {{ .Values.gateway.aws.gatewayParametersName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  kube:
+    deployment:
+      replicas: {{ .Values.gateway.aws.proxyReplicas }}
+    podDisruptionBudget:
+      metadata:
+        labels:
+          app.kubernetes.io/name: {{ .Chart.Name }}
+          app.kubernetes.io/instance: {{ .Release.Name }}
+      spec:
+        minAvailable: 1
+    service:
+      type: LoadBalancer
+      extraAnnotations:
+        {{- toYaml .Values.gateway.aws.serviceAnnotations | nindent 8 }}
+{{- end }}

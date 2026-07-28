@@ -4,6 +4,20 @@ postgres:
 registry:
   enabled: false
 
+gateway:
+  enabled: true
+  deploymentManagerHostname: REPLACE_WITH_MANAGER_HOSTNAME
+  applicationWildcardHostname: "*.REPLACE_WITH_APPLICATION_DOMAIN"
+  tls:
+    issuerRef:
+      group: cert-manager.io
+      kind: ClusterIssuer
+      name: letsencrypt-production
+    localIssuer:
+      enabled: false
+  aws:
+    enabled: true
+
 deployment-manager:
   image:
     repository: REPLACE_WITH_ECR/deployment-manager

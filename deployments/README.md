@@ -2,6 +2,22 @@
 
 This umbrella chart installs the deployment manager, RCA agent, and MCP server. The Kind profile also installs persistent PostgreSQL and an OCI registry. The application charts use ConfigMaps for non-sensitive settings and reference Kubernetes Secrets for database and LLM credentials.
 
+## Cluster prerequisites
+
+The platform uses one Kubernetes Gateway implemented by kgateway. Gateway API CRDs, kgateway, and cert-manager are cluster-scoped prerequisites and are intentionally not dependencies of this application chart.
+
+Install them with an explicit Kubernetes context:
+
+```bash
+./scripts/install-cluster-prerequisites.sh \
+  --environment kind \
+  --context kind-rca-lab
+```
+
+The script installs pinned standard-channel Gateway API CRDs, kgateway and cert-manager, waits for their controllers, verifies the `kgateway` GatewayClass, and labels the `rca-platform` and `apps` namespaces so only those namespaces can attach routes to the shared Gateway. It is safe to run repeatedly.
+
+Kind does not implement `LoadBalancer` Services by itself. Install and run [cloud-provider-kind](https://kubernetes-sigs.github.io/cloud-provider-kind/) before testing the external Gateway address. A port-forward fallback is documented below.
+
 ## Local Kind installation
 
 Build the application images from the repository root:
@@ -44,8 +60,22 @@ helm upgrade rca-platform ./deployments \
 Access the API with port forwarding, which works regardless of Kind port mappings:
 
 ```bash
-kubectl port-forward -n rca-platform svc/rca-platform-deployment-manager 3000:80
+kubectl port-forward -n rca-platform svc/rca-gateway 8080:80 8443:443
+curl --resolve manager.rca.local:8443:127.0.0.1 \
+  --insecure https://manager.rca.local:8443/healthz
 ```
+
+With cloud-provider-kind running, get the Gateway address and test the production-shaped ports:
+
+```bash
+kubectl get gateway rca-gateway -n rca-platform
+kubectl get svc rca-gateway -n rca-platform
+
+curl --resolve manager.rca.local:443:<GATEWAY-IP> \
+  --insecure https://manager.rca.local/healthz
+```
+
+The Kind profile uses a self-signed certificate for `manager.rca.local` and `*.apps.rca.local`. Browsers will warn until the local certificate is trusted. `/etc/hosts` does not support wildcard entries; add `manager.rca.local` explicitly or use `curl --resolve`.
 
 The Kind profile also installs the shared OpenTelemetry Collector, Prometheus, Loki, Tempo, and Grafana. Access Grafana with:
 
@@ -63,7 +93,36 @@ The deployment-manager image contains the Prisma CLI and checked-in migrations. 
 
 ## Production prerequisites
 
-Bundled Postgres and the local registry are disabled by default and in `values-prod.yaml`. Before a production install, create a Secret with a `DATABASE_URL` key; it defaults to `<release-name>-database` or can be set through `global.database.secretName`. Configure immutable ECR image references and provide the agent LLM Secret. EKS ingress, AWS Secrets Manager integration, and production observability are intentionally handled in later phases.
+Bundled Postgres and the local registry are disabled in `values-prod.yaml`. Before a production install:
+
+1. Provision the AWS Load Balancer Controller and its IAM permissions through EKS infrastructure.
+2. Install the shared controllers:
+
+   ```bash
+   ./scripts/install-cluster-prerequisites.sh \
+     --environment eks \
+     --context '<EKS-KUBE-CONTEXT>'
+   ```
+
+3. Provision a `letsencrypt-production` ClusterIssuer using Route 53 DNS-01 and IAM scoped to the hosted zone.
+4. Create Route 53 records for the manager hostname and application wildcard that point to the generated NLB.
+5. Create a Secret with a `DATABASE_URL` key; it defaults to `<release-name>-database` or can be set through `global.database.secretName`.
+6. Configure immutable ECR image references and provide the agent LLM Secret.
+
+The production values intentionally contain invalid hostname placeholders. Helm schema validation prevents installation until both are replaced:
+
+```bash
+helm upgrade --install rca-platform ./deployments \
+  --namespace rca-platform \
+  -f ./deployments/values-prod.yaml \
+  --set-string gateway.deploymentManagerHostname=manager.rca.example.com \
+  --set-string 'gateway.applicationWildcardHostname=*.apps.rca.example.com' \
+  --wait --timeout 10m
+```
+
+The EKS-only `GatewayParameters` configures kgateway's generated `LoadBalancer` Service for an internet-facing AWS NLB. TLS is passed through the NLB and terminated by Envoy with the Secret maintained by cert-manager.
+
+See [Gateway operations](../docs/gateway.md) for ownership, troubleshooting, and readiness checks.
 
 ## Validation
 

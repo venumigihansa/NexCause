@@ -16,6 +16,151 @@
         }
       }
     },
+    "gateway": {
+      "type": "object",
+      "required": [
+        "enabled",
+        "name",
+        "className",
+        "deploymentManagerHostname",
+        "applicationWildcardHostname",
+        "allowedRoutes",
+        "tls",
+        "aws"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+          "maxLength": 63
+        },
+        "className": { "type": "string", "minLength": 1 },
+        "deploymentManagerHostname": { "type": "string" },
+        "applicationWildcardHostname": { "type": "string" },
+        "allowedRoutes": {
+          "type": "object",
+          "required": ["namespaceLabel"],
+          "properties": {
+            "namespaceLabel": {
+              "type": "object",
+              "required": ["key", "value"],
+              "properties": {
+                "key": { "type": "string", "minLength": 1 },
+                "value": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        },
+        "tls": {
+          "type": "object",
+          "required": ["secretName", "issuerRef", "localIssuer"],
+          "properties": {
+            "secretName": {
+              "type": "string",
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+              "maxLength": 253
+            },
+            "issuerRef": {
+              "type": "object",
+              "required": ["group", "kind", "name"],
+              "properties": {
+                "group": { "const": "cert-manager.io" },
+                "kind": { "enum": ["Issuer", "ClusterIssuer"] },
+                "name": { "type": "string", "minLength": 1 }
+              }
+            },
+            "localIssuer": {
+              "type": "object",
+              "required": ["enabled", "name"],
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "name": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        },
+        "aws": {
+          "type": "object",
+          "required": [
+            "enabled",
+            "gatewayParametersName",
+            "proxyReplicas",
+            "serviceAnnotations"
+          ],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "gatewayParametersName": {
+              "type": "string",
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+              "maxLength": 253
+            },
+            "proxyReplicas": { "type": "integer", "minimum": 2 },
+            "serviceAnnotations": {
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "enabled": { "const": true } },
+            "required": ["enabled"]
+          },
+          "then": {
+            "properties": {
+              "deploymentManagerHostname": {
+                "type": "string",
+                "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)+$",
+                "not": { "pattern": "REPLACE_WITH" }
+              },
+              "applicationWildcardHostname": {
+                "type": "string",
+                "pattern": "^\\*\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)+$",
+                "not": { "pattern": "REPLACE_WITH" }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "aws": {
+                "properties": { "enabled": { "const": true } },
+                "required": ["enabled"]
+              }
+            },
+            "required": ["aws"]
+          },
+          "then": {
+            "properties": {
+              "tls": {
+                "properties": {
+                  "issuerRef": {
+                    "properties": {
+                      "kind": { "const": "ClusterIssuer" }
+                    }
+                  },
+                  "localIssuer": {
+                    "properties": {
+                      "enabled": { "const": false }
+                    }
+                  }
+                }
+              },
+              "deploymentManagerHostname": {
+                "not": { "pattern": "\\.local$" }
+              },
+              "applicationWildcardHostname": {
+                "not": { "pattern": "\\.local$" }
+              }
+            }
+          }
+        }
+      ]
+    },
     "postgres": { "type": "object" },
     "registry": { "type": "object" }
   }

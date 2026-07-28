@@ -1,0 +1,44 @@
+{{- if .Values.gateway.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ include "rca-platform.gatewayName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  gatewayClassName: {{ required "gateway.className is required when gateway.enabled=true" .Values.gateway.className }}
+  {{- if .Values.gateway.aws.enabled }}
+  infrastructure:
+    parametersRef:
+      group: gateway.kgateway.dev
+      kind: GatewayParameters
+      name: {{ required "gateway.aws.gatewayParametersName is required when gateway.aws.enabled=true" .Values.gateway.aws.gatewayParametersName }}
+  {{- end }}
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              {{ .Values.gateway.allowedRoutes.namespaceLabel.key | quote }}: {{ .Values.gateway.allowedRoutes.namespaceLabel.value | quote }}
+    - name: https
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: {{ required "gateway.tls.secretName is required when gateway.enabled=true" .Values.gateway.tls.secretName }}
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              {{ .Values.gateway.allowedRoutes.namespaceLabel.key | quote }}: {{ .Values.gateway.allowedRoutes.namespaceLabel.value | quote }}
+{{- end }}

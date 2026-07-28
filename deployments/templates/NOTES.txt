@@ -3,7 +3,18 @@ RCA Platform {{ .Chart.AppVersion }} is installed in namespace {{ .Release.Names
 Check workloads:
   kubectl get pods -n {{ .Release.Namespace }}
 
+{{- if .Values.gateway.enabled }}
+Check the shared Gateway:
+  kubectl get gateway,httproute,certificate -n {{ .Release.Namespace }}
+
+The deployment manager is available at:
+  https://{{ .Values.gateway.deploymentManagerHostname }}
+
+For Kind without a LoadBalancer implementation, forward the generated Envoy service:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "rca-platform.gatewayName" . }} 8080:80 8443:443
+{{- else }}
 Access the deployment manager locally:
   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ .Release.Name }}-deployment-manager 3000:80
 
 Then open or query http://127.0.0.1:3000.
+{{- end }}

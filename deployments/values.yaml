@@ -16,6 +16,34 @@ global:
     capabilities:
       drop: ["ALL"]
 
+gateway:
+  enabled: false
+  name: rca-gateway
+  className: kgateway
+  deploymentManagerHostname: ""
+  applicationWildcardHostname: ""
+  allowedRoutes:
+    namespaceLabel:
+      key: rca-platform.io/gateway-access
+      value: "true"
+  tls:
+    secretName: rca-gateway-tls
+    issuerRef:
+      group: cert-manager.io
+      kind: Issuer
+      name: rca-local-selfsigned
+    localIssuer:
+      enabled: false
+      name: rca-local-selfsigned
+  aws:
+    enabled: false
+    gatewayParametersName: rca-aws-gateway
+    proxyReplicas: 2
+    serviceAnnotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: external
+      service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+      service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: instance
+
 deployment-manager:
   image:
     repository: rca-platform/deployment-manager
