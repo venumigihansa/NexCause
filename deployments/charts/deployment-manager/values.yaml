@@ -10,6 +10,15 @@ service:
 migration:
   enabled: true
   backoffLimit: 3
+  activeDeadlineSeconds: 300
+auth:
+  existingSecret:
+    name: rca-asgardeo
+    clientSecretKey: ASGARDEO_CLIENT_SECRET
+    encryptionKeyKey: AUTH_SESSION_ENCRYPTION_KEY
+sessionCleanup:
+  enabled: true
+  schedule: "*/15 * * * *"
 localRegistry:
   enabled: false
   port: 5000

@@ -9,6 +9,11 @@ import (
 )
 
 func (s *PostgresStore) GetRCAContextRecord(ctx context.Context, runID string, incidentID string) (RCAContextRecord, error) {
+	tx, err := s.tenantTx(ctx)
+	if err != nil {
+		return RCAContextRecord{}, err
+	}
+	defer tx.Rollback()
 	const query = `
 SELECT
   r."id", r."source", COALESCE(r."startedAt", r."createdAt"),
@@ -27,7 +32,7 @@ WHERE r."id" = $1 AND i."id" = $2`
 	var ruleKey, summary, latestHealthSampleID, buildID sql.NullString
 	var latestCollectedAt sql.NullTime
 
-	err := s.db.QueryRowContext(ctx, query, runID, incidentID).Scan(
+	err = tx.QueryRowContext(ctx, query, runID, incidentID).Scan(
 		&record.Run.ID,
 		&record.Run.Source,
 		&record.Run.StartedAt,
@@ -53,6 +58,9 @@ WHERE r."id" = $1 AND i."id" = $2`
 	if err != nil {
 		return RCAContextRecord{}, err
 	}
+	if err := tx.Commit(); err != nil {
+		return RCAContextRecord{}, err
+	}
 
 	record.Incident.RuleKey = nullableString(ruleKey)
 	record.Incident.Summary = nullableString(summary)
@@ -66,6 +74,11 @@ WHERE r."id" = $1 AND i."id" = $2`
 }
 
 func (s *PostgresStore) ListHealthSamples(ctx context.Context, deploymentID string, start time.Time, end time.Time, limit int) ([]HealthSample, error) {
+	tx, err := s.tenantTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
 	const query = `
 SELECT "id", "status", "desiredReplicas", "readyReplicas", "availableReplicas", "podCount",
        "warningEventCount", "restartCount", "data", "collectedAt"
@@ -74,7 +87,7 @@ WHERE "deploymentId" = $1 AND "collectedAt" >= $2 AND "collectedAt" <= $3
 ORDER BY "collectedAt" DESC
 LIMIT $4`
 
-	rows, err := s.db.QueryContext(ctx, query, deploymentID, start, end, limit)
+	rows, err := tx.QueryContext(ctx, query, deploymentID, start, end, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -100,17 +113,31 @@ LIMIT $4`
 		samples = append(samples, sample)
 	}
 
-	return samples, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return samples, nil
 }
 
 func (s *PostgresStore) ListRuntimeConfigs(ctx context.Context, deploymentID string) ([]RuntimeConfig, error) {
+	tx, err := s.tenantTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
 	const query = `
 SELECT "id", "type", "data", "createdAt", "updatedAt"
 FROM "RuntimeConfig"
 WHERE "deploymentId" = $1
 ORDER BY "createdAt" ASC`
 
-	rows, err := s.db.QueryContext(ctx, query, deploymentID)
+	rows, err := tx.QueryContext(ctx, query, deploymentID)
 	if err != nil {
 		return nil, err
 	}
@@ -125,10 +152,24 @@ ORDER BY "createdAt" ASC`
 		configs = append(configs, config)
 	}
 
-	return configs, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return configs, nil
 }
 
 func (s *PostgresStore) ListRecentChanges(ctx context.Context, deploymentID string, start time.Time, end time.Time, limit int) ([]RecentChange, error) {
+	tx, err := s.tenantTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
 	const query = `
 SELECT kind, id, summary, changed_at
 FROM (
@@ -143,7 +184,7 @@ FROM (
 ORDER BY changed_at DESC
 LIMIT $4`
 
-	rows, err := s.db.QueryContext(ctx, query, deploymentID, start, end, limit)
+	rows, err := tx.QueryContext(ctx, query, deploymentID, start, end, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +198,16 @@ LIMIT $4`
 		}
 		changes = append(changes, change)
 	}
-	return changes, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return changes, nil
 }
 
 func nullableString(value sql.NullString) *string {

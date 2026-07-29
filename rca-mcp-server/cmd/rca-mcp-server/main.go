@@ -15,6 +15,7 @@ import (
 	"rca-mcp-server/internal/adapters"
 	"rca-mcp-server/internal/config"
 	rcacontext "rca-mcp-server/internal/context"
+	"rca-mcp-server/internal/serviceauth"
 	"rca-mcp-server/internal/services"
 	"rca-mcp-server/internal/store"
 	"rca-mcp-server/internal/tools"
@@ -41,6 +42,9 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+	db.SetMaxOpenConns(cfg.DatabaseMaxOpenConnections)
+	db.SetMaxIdleConns(cfg.DatabaseMaxIdleConnections)
+	db.SetConnMaxIdleTime(5 * time.Minute)
 
 	if err := db.Ping(); err != nil {
 		logger.Error("failed to connect to database", "error", err)
@@ -70,7 +74,14 @@ func main() {
 	})
 
 	mux := http.NewServeMux()
-	mux.Handle("/mcp", tools.NewMCPHandler(registry, logger))
+	mux.Handle("/mcp", http.TimeoutHandler(
+		serviceauth.Middleware(
+			cfg.InternalServiceJWTSecret,
+			tools.NewMCPHandler(registry, logger),
+		),
+		35*time.Second,
+		`{"error":"request timed out"}`,
+	))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))

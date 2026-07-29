@@ -11,6 +11,7 @@ ReportStatus = Literal[
 
 
 class RunRequest(BaseModel):
+    workspaceId: str
     runId: str
     incidentId: str
 

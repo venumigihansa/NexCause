@@ -1,4 +1,4 @@
-import * as k8s from '@kubernetes/client-node';
+import * as k8s from "@kubernetes/client-node";
 
 interface BuildDeploymentManifestInput {
   name: string;
@@ -79,8 +79,8 @@ export function buildDeploymentManifest({
   }
 
   return {
-    apiVersion: 'apps/v1',
-    kind: 'Deployment',
+    apiVersion: "apps/v1",
+    kind: "Deployment",
     metadata: {
       name,
       labels,
@@ -98,7 +98,7 @@ export function buildDeploymentManifest({
           volumes: volumes.length > 0 ? volumes : undefined,
           containers: [
             {
-              name: 'app',
+              name: "app",
               image,
               ports: [{ containerPort: port }],
               envFrom: envFrom.length > 0 ? envFrom : undefined,

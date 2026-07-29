@@ -19,6 +19,7 @@ spec:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- with .Values.podAnnotations }}{{ toYaml . | nindent 8 }}{{- end }}
     spec:
+      automountServiceAccountToken: false
       securityContext:
         {{- toYaml .Values.global.podSecurityContext | nindent 8 }}
       {{- with .Values.global.imagePullSecrets }}
@@ -40,8 +41,13 @@ spec:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "rca-platform.databaseSecretName" . }}
+                  name: {{ default (include "rca-platform.databaseSecretName" .) .Values.global.database.agentSecretName }}
                   key: {{ .Values.global.database.secretKey }}
+            - name: INTERNAL_SERVICE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.internalAuth.secretName }}
+                  key: {{ .Values.global.internalAuth.secretKey }}
             {{- if .Values.existingSecret.name }}
             - name: RCA_LLM_API_KEY
               valueFrom:

@@ -1,4 +1,4 @@
-import * as k8s from '@kubernetes/client-node';
+import * as k8s from "@kubernetes/client-node";
 
 interface BuildServiceManifestInput {
   name: string;
@@ -12,18 +12,18 @@ export function buildServiceManifest({
   labels,
 }: BuildServiceManifestInput): k8s.V1Service {
   return {
-    apiVersion: 'v1',
-    kind: 'Service',
+    apiVersion: "v1",
+    kind: "Service",
     metadata: {
       name,
       labels,
     },
     spec: {
-      type: 'ClusterIP',
+      type: "ClusterIP",
       selector: labels,
       ports: [
         {
-          name: 'http',
+          name: "http",
           port,
           targetPort: port,
         },

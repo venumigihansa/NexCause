@@ -1,5 +1,5 @@
-import { Module } from '@nestjs/common';
-import { SourceControlService } from './source-control.service';
+import { Module } from "@nestjs/common";
+import { SourceControlService } from "./source-control.service";
 
 @Module({
   providers: [SourceControlService],

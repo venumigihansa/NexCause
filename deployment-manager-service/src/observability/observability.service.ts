@@ -4,15 +4,16 @@ import {
   NotFoundException,
   OnModuleDestroy,
   OnModuleInit,
-} from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { DeploymentStatus, Prisma } from '@prisma/client';
-import { PrismaService } from '../database/prisma.service';
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { DeploymentStatus, Prisma } from "@prisma/client";
+import { PrismaService } from "../database/prisma.service";
+import { TenantContextService } from "../database/tenant-context.service";
 import {
   DeploymentEventSummary,
   DeploymentPodSummary,
   KubernetesService,
-} from '../kubernetes/kubernetes.service';
+} from "../kubernetes/kubernetes.service";
 
 interface TelemetryEnvInput {
   appId: string;
@@ -32,6 +33,7 @@ export class ObservabilityService implements OnModuleInit, OnModuleDestroy {
     private readonly configService: ConfigService,
     private readonly kubernetesService: KubernetesService,
     private readonly prisma: PrismaService,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
   onModuleInit() {
@@ -67,18 +69,18 @@ export class ObservabilityService implements OnModuleInit, OnModuleDestroy {
     return {
       OTEL_SERVICE_NAME: input.appName,
       OTEL_EXPORTER_OTLP_ENDPOINT:
-        this.configService.get<string>('otelExporterOtlpEndpoint') ??
-        'http://otel-collector-opentelemetry-collector.observability.svc.cluster.local:4318',
+        this.configService.get<string>("otelExporterOtlpEndpoint") ??
+        "http://otel-collector-opentelemetry-collector.observability.svc.cluster.local:4318",
       OTEL_EXPORTER_OTLP_PROTOCOL:
-        this.configService.get<string>('otelExporterOtlpProtocol') ??
-        'http/protobuf',
+        this.configService.get<string>("otelExporterOtlpProtocol") ??
+        "http/protobuf",
       OTEL_RESOURCE_ATTRIBUTES: [
         `service.namespace=${input.namespace}`,
         `app.id=${input.appId}`,
         `deployment.id=${input.deploymentId}`,
         `deployment.name=${input.deploymentName}`,
-        'app.kubernetes.io/managed-by=deployment-manager-service',
-      ].join(','),
+        "app.kubernetes.io/managed-by=deployment-manager-service",
+      ].join(","),
     };
   }
 
@@ -87,10 +89,10 @@ export class ObservabilityService implements OnModuleInit, OnModuleDestroy {
     return {
       enabled: this.isEnabled(),
       otelExporterOtlpEndpoint: this.configService.get<string>(
-        'otelExporterOtlpEndpoint',
+        "otelExporterOtlpEndpoint",
       ),
       otelExporterOtlpProtocol: this.configService.get<string>(
-        'otelExporterOtlpProtocol',
+        "otelExporterOtlpProtocol",
       ),
       healthSampleIntervalSeconds: this.getHealthSampleIntervalSeconds(),
       healthSampleRetentionMinutes: this.getHealthSampleRetentionMinutes(),
@@ -106,33 +108,36 @@ export class ObservabilityService implements OnModuleInit, OnModuleDestroy {
     this.isCollecting = true;
 
     try {
-      const deployments = await this.prisma.deployment.findMany({
-        where: {
-          deletedAt: null,
-          status: {
-            not: DeploymentStatus.deleted,
-          },
-        },
-        select: {
-          id: true,
-          appId: true,
-          namespace: true,
-          status: true,
-          kubernetesDeployment: true,
-        },
+      const workspaces = await this.prisma.workspace.findMany({
+        where: { status: "active" },
+        select: { id: true },
       });
-
-      await Promise.all(
-        deployments.map((deployment) =>
-          this.collectDeploymentHealthSample(deployment.id).catch((error) => {
-            this.logger.warn(
-              `Failed to collect health sample for deployment ${deployment.id}: ${getErrorMessage(error)}`,
+      for (const workspace of workspaces) {
+        await this.tenantContext.run(
+          { workspaceId: workspace.id },
+          async () => {
+            const deployments = await this.prisma.deployment.findMany({
+              where: {
+                deletedAt: null,
+                status: { not: DeploymentStatus.deleted },
+              },
+              select: { id: true },
+            });
+            await Promise.all(
+              deployments.map((deployment) =>
+                this.collectDeploymentHealthSample(deployment.id).catch(
+                  (error) => {
+                    this.logger.warn(
+                      `Failed to collect health sample for deployment ${deployment.id}: ${getErrorMessage(error)}`,
+                    );
+                  },
+                ),
+              ),
             );
-          }),
-        ),
-      );
-
-      await this.deleteExpiredHealthSamples();
+            await this.deleteExpiredHealthSamples();
+          },
+        );
+      }
     } finally {
       this.isCollecting = false;
     }
@@ -142,6 +147,7 @@ export class ObservabilityService implements OnModuleInit, OnModuleDestroy {
   async collectDeploymentHealthSample(deploymentId: string) {
     const deployment = await this.findDeploymentForHealthSample(deploymentId);
     const labels = this.kubernetesService.buildManagedLabels(
+      deployment.workspaceId,
       deployment.appId,
       deployment.id,
     );
@@ -211,7 +217,7 @@ export class ObservabilityService implements OnModuleInit, OnModuleDestroy {
             }
           : {}),
       },
-      orderBy: { collectedAt: 'desc' },
+      orderBy: { collectedAt: "desc" },
     });
   }
 
@@ -221,20 +227,20 @@ export class ObservabilityService implements OnModuleInit, OnModuleDestroy {
 
     return this.prisma.deploymentHealthSample.findFirst({
       where: { deploymentId },
-      orderBy: { collectedAt: 'desc' },
+      orderBy: { collectedAt: "desc" },
     });
   }
 
   private isEnabled(): boolean {
-    return this.configService.get<boolean>('observabilityEnabled') ?? true;
+    return this.configService.get<boolean>("observabilityEnabled") ?? true;
   }
 
   private getHealthSampleIntervalSeconds(): number {
-    return this.configService.get<number>('healthSampleIntervalSeconds') ?? 60;
+    return this.configService.get<number>("healthSampleIntervalSeconds") ?? 60;
   }
 
   private getHealthSampleRetentionMinutes(): number {
-    return this.configService.get<number>('healthSampleRetentionMinutes') ?? 60;
+    return this.configService.get<number>("healthSampleRetentionMinutes") ?? 60;
   }
 
   private async deleteExpiredHealthSamples() {
@@ -263,6 +269,7 @@ export class ObservabilityService implements OnModuleInit, OnModuleDestroy {
       where: { id: deploymentId },
       select: {
         id: true,
+        workspaceId: true,
         appId: true,
         namespace: true,
         status: true,
@@ -279,7 +286,7 @@ export class ObservabilityService implements OnModuleInit, OnModuleDestroy {
 }
 
 function countWarningEvents(events: DeploymentEventSummary[]): number {
-  return events.filter((event) => event.type === 'Warning').length;
+  return events.filter((event) => event.type === "Warning").length;
 }
 
 function countRestarts(pods: DeploymentPodSummary[]): number {
@@ -287,8 +294,7 @@ function countRestarts(pods: DeploymentPodSummary[]): number {
     (total, pod) =>
       total +
       pod.containers.reduce(
-        (containerTotal, container) =>
-          containerTotal + container.restartCount,
+        (containerTotal, container) => containerTotal + container.restartCount,
         0,
       ),
     0,
@@ -310,7 +316,7 @@ function deriveSampleStatus(
   }
 
   if (warningEventCount > 0) {
-    return 'warning';
+    return "warning";
   }
 
   if (desiredReplicas > 0 && readyReplicas >= desiredReplicas) {
@@ -333,5 +339,5 @@ function getErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  return 'Unknown error';
+  return "Unknown error";
 }

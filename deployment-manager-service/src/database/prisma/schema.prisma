@@ -67,9 +67,123 @@ enum RcaRunSource {
   automatic
 }
 
+enum WorkspaceStatus {
+  active
+  suspended
+  deleted
+}
+
+model Workspace {
+  id                     String                   @id @default(cuid())
+  asgardeoOrganizationId String                   @unique
+  displayName            String
+  status                 WorkspaceStatus          @default(active)
+  kubernetesNamespace    String                   @unique
+  memberships            WorkspaceMembership[]
+  sessions               AuthSession[]
+  auditEvents            AuditEvent[]
+  apps                   App[]
+  deployments            Deployment[]
+  healthSamples          DeploymentHealthSample[]
+  incidents              Incident[]
+  rcaRuns                RcaRun[]
+  rcaRunEvents           RcaRunEvent[]
+  agentThreads           RcaAgentThread[]
+  chatMessages           RcaChatMessage[]
+  evidenceSnapshots      EvidenceSnapshot[]
+  runtimeConfigs         RuntimeConfig[]
+  builds                 Build[]
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  deletedAt              DateTime?
+}
+
+model IdentityUser {
+  id          String                @id @default(cuid())
+  subject     String                @unique
+  email       String?
+  displayName String?
+  memberships WorkspaceMembership[]
+  sessions    AuthSession[]
+  auditEvents AuditEvent[]
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+}
+
+model WorkspaceMembership {
+  workspaceId String
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        IdentityUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roles       String[]     @default([])
+  scopes      String[]     @default([])
+  lastSeenAt  DateTime     @default(now())
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@id([workspaceId, userId])
+  @@index([userId])
+}
+
+model AuthLoginAttempt {
+  stateHash             String   @id
+  nonce                 String
+  codeVerifierEncrypted String
+  returnTo              String?
+  expiresAt             DateTime
+  createdAt             DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+model AuthSession {
+  idHash                String       @id
+  userId                String
+  user                  IdentityUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId           String
+  workspace             Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organizationId        String
+  roles                 String[]     @default([])
+  scopes                String[]     @default([])
+  csrfToken             String
+  accessTokenEncrypted  String?
+  refreshTokenEncrypted String?
+  idTokenEncrypted      String?
+  accessTokenExpiresAt  DateTime?
+  idleExpiresAt         DateTime
+  absoluteExpiresAt     DateTime
+  lastSeenAt            DateTime     @default(now())
+  createdAt             DateTime     @default(now())
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([idleExpiresAt])
+  @@index([absoluteExpiresAt])
+}
+
+model AuditEvent {
+  id           String        @id @default(cuid())
+  workspaceId  String?
+  workspace    Workspace?    @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  actorUserId  String?
+  actor        IdentityUser? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  action       String
+  resourceType String?
+  resourceId   String?
+  outcome      String
+  metadata     Json?
+  createdAt    DateTime      @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+}
+
 model App {
   id           String        @id @default(cuid())
-  name         String        @unique
+  workspaceId  String        @default(dbgenerated("current_setting('app.workspace_id')"))
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name         String
   displayName  String
   sourceType   AppSourceType @default(image)
   image        String?
@@ -83,10 +197,15 @@ model App {
   incidents    Incident[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+
+  @@unique([workspaceId, name])
+  @@unique([id, workspaceId])
 }
 
 model Deployment {
   id                    String             @id @default(cuid())
+  workspaceId           String             @default(dbgenerated("current_setting('app.workspace_id')"))
+  workspace             Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   appId                 String
   app                   App                @relation(fields: [appId], references: [id], onDelete: Cascade)
   buildId               String?
@@ -118,10 +237,13 @@ model Deployment {
   @@index([appId])
   @@index([buildId])
   @@index([namespace])
+  @@unique([id, workspaceId])
 }
 
 model DeploymentHealthSample {
   id                 String     @id @default(cuid())
+  workspaceId        String     @default(dbgenerated("current_setting('app.workspace_id')"))
+  workspace          Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   deploymentId       String
   deployment         Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
   status             String
@@ -137,10 +259,13 @@ model DeploymentHealthSample {
 
   @@index([deploymentId, collectedAt])
   @@index([collectedAt])
+  @@unique([id, workspaceId])
 }
 
 model Incident {
   id                    String                  @id @default(cuid())
+  workspaceId           String                  @default(dbgenerated("current_setting('app.workspace_id')"))
+  workspace             Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   appId                 String
   app                   App                     @relation(fields: [appId], references: [id], onDelete: Cascade)
   deploymentId          String
@@ -164,10 +289,13 @@ model Incident {
   @@index([deploymentId, status])
   @@index([latestHealthSampleId])
   @@index([status])
+  @@unique([id, workspaceId])
 }
 
 model RcaRun {
   id                 String            @id @default(cuid())
+  workspaceId        String            @default(dbgenerated("current_setting('app.workspace_id')"))
+  workspace          Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   incidentId         String
   incident           Incident          @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   deploymentId       String
@@ -179,6 +307,7 @@ model RcaRun {
   result             Json?
   errorMessage       String?
   agentThreads       RcaAgentThread[]
+  events             RcaRunEvent[]
   startedAt          DateTime?
   completedAt        DateTime?
   createdAt          DateTime          @default(now())
@@ -188,10 +317,27 @@ model RcaRun {
   @@index([deploymentId])
   @@index([evidenceSnapshotId])
   @@index([status])
+  @@unique([id, workspaceId])
+}
+
+model RcaRunEvent {
+  id          String    @id @default(cuid())
+  workspaceId String    @default(dbgenerated("current_setting('app.workspace_id')"))
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  rcaRunId    String
+  rcaRun      RcaRun    @relation(fields: [rcaRunId], references: [id], onDelete: Cascade)
+  type        String
+  data        Json?
+  createdAt   DateTime  @default(now())
+
+  @@index([rcaRunId, createdAt])
+  @@unique([id, workspaceId])
 }
 
 model RcaAgentThread {
   id                  String           @id @default(cuid())
+  workspaceId         String           @default(dbgenerated("current_setting('app.workspace_id')"))
+  workspace           Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   rcaRunId            String
   rcaRun              RcaRun           @relation(fields: [rcaRunId], references: [id], onDelete: Cascade)
   checkpointThreadId  String
@@ -203,10 +349,13 @@ model RcaAgentThread {
   @@unique([rcaRunId])
   @@index([checkpointThreadId])
   @@index([status])
+  @@unique([id, workspaceId])
 }
 
 model RcaChatMessage {
   id        String         @id @default(cuid())
+  workspaceId String       @default(dbgenerated("current_setting('app.workspace_id')"))
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   threadId  String
   thread    RcaAgentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
   role      String
@@ -216,10 +365,13 @@ model RcaChatMessage {
 
   @@index([threadId, createdAt])
   @@index([role])
+  @@unique([id, workspaceId])
 }
 
 model EvidenceSnapshot {
   id            String     @id @default(cuid())
+  workspaceId   String     @default(dbgenerated("current_setting('app.workspace_id')"))
+  workspace     Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   deploymentId  String
   deployment    Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
   status        String
@@ -230,10 +382,13 @@ model EvidenceSnapshot {
 
   @@index([deploymentId])
   @@index([createdAt])
+  @@unique([id, workspaceId])
 }
 
 model RuntimeConfig {
   id            String            @id @default(cuid())
+  workspaceId   String            @default(dbgenerated("current_setting('app.workspace_id')"))
+  workspace     Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   deploymentId  String
   deployment    Deployment        @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
   type          RuntimeConfigType
@@ -242,10 +397,13 @@ model RuntimeConfig {
   updatedAt     DateTime          @updatedAt
 
   @@index([deploymentId])
+  @@unique([id, workspaceId])
 }
 
 model Build {
   id             String      @id @default(cuid())
+  workspaceId    String      @default(dbgenerated("current_setting('app.workspace_id')"))
+  workspace      Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   appId          String
   app            App         @relation(fields: [appId], references: [id], onDelete: Cascade)
   deployments    Deployment[]
@@ -263,4 +421,5 @@ model Build {
 
   @@index([appId])
   @@index([status])
+  @@unique([id, workspaceId])
 }

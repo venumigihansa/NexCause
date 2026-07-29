@@ -28,7 +28,9 @@ spec:
             - { name: postgres, containerPort: 5432 }
           envFrom:
             - secretRef:
-                name: {{ include "rca-platform.databaseSecretName" . }}
+                name: {{ include "postgres.fullname" . }}-admin
+            - secretRef:
+                name: {{ include "postgres.fullname" . }}-roles
           readinessProbe:
             exec:
               command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
@@ -43,10 +45,21 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: init-roles, mountPath: /docker-entrypoint-initdb.d/10-rca-roles.sh, subPath: 10-rca-roles.sh, readOnly: true }
       {{- if not .Values.persistence.enabled }}
       volumes:
         - name: data
           emptyDir: {}
+        - name: init-roles
+          configMap:
+            name: {{ include "postgres.fullname" . }}-init-roles
+            defaultMode: 0550
+      {{- else }}
+      volumes:
+        - name: init-roles
+          configMap:
+            name: {{ include "postgres.fullname" . }}-init-roles
+            defaultMode: 0550
       {{- end }}
   {{- if .Values.persistence.enabled }}
   volumeClaimTemplates:

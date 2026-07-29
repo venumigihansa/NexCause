@@ -41,8 +41,13 @@ spec:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "rca-platform.databaseSecretName" . }}
+                  name: {{ default (include "rca-platform.databaseSecretName" .) .Values.global.database.mcpSecretName }}
                   key: {{ .Values.global.database.secretKey }}
+            - name: INTERNAL_SERVICE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.internalAuth.secretName }}
+                  key: {{ .Values.global.internalAuth.secretKey }}
             - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:

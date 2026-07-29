@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"rca-mcp-server/internal/serviceauth"
 )
 
 type MCPHandler struct {
@@ -74,6 +75,12 @@ func (h *MCPHandler) dispatch(r *http.Request, req jsonRPCRequest) (any, *jsonRP
 		if err := json.Unmarshal(req.Params, &params); err != nil {
 			return nil, &jsonRPCError{Code: -32602, Message: err.Error()}
 		}
+		claims, ok := serviceauth.FromContext(r.Context())
+		if !ok ||
+			stringArgument(params.Arguments, "runId") != claims.RunID ||
+			stringArgument(params.Arguments, "incidentId") != claims.IncidentID {
+			return nil, &jsonRPCError{Code: -32602, Message: "tool scope does not match the authenticated RCA run"}
+		}
 		result, err := h.registry.Call(r.Context(), params.Name, params.Arguments)
 		if err != nil {
 			h.logger.Warn("tool call failed", "tool", params.Name, "error", err)
@@ -91,6 +98,11 @@ func (h *MCPHandler) dispatch(r *http.Request, req jsonRPCRequest) (any, *jsonRP
 	default:
 		return nil, &jsonRPCError{Code: -32601, Message: "method not found"}
 	}
+}
+
+func stringArgument(arguments map[string]any, key string) string {
+	value, _ := arguments[key].(string)
+	return value
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

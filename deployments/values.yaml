@@ -2,7 +2,21 @@ global:
   database:
     secretName: ""
     secretKey: DATABASE_URL
+    deploymentManagerSecretName: ""
+    migratorSecretName: ""
+    agentSecretName: ""
+    mcpSecretName: ""
     bundled: false
+  internalAuth:
+    secretName: rca-internal-auth
+    secretKey: INTERNAL_SERVICE_JWT_SECRET
+  externalSecrets:
+    enabled: false
+    refreshInterval: 1h
+    secretStoreRef:
+      kind: ClusterSecretStore
+      name: aws-secrets-manager
+    mappings: []
   imagePullSecrets: []
   observability:
     enabled: true
@@ -51,6 +65,11 @@ deployment-manager:
     pullPolicy: IfNotPresent
   migration:
     enabled: true
+  auth:
+    existingSecret:
+      name: rca-asgardeo
+      clientSecretKey: ASGARDEO_CLIENT_SECRET
+      encryptionKeyKey: AUTH_SESSION_ENCRYPTION_KEY
   config:
     DEFAULT_KUBERNETES_NAMESPACE: apps
     OBSERVABILITY_ENABLED: "true"
@@ -58,6 +77,16 @@ deployment-manager:
     AUTO_RCA_ENABLED: "false"
     RCA_AGENT_ENABLED: "true"
     RCA_AGENT_TRIGGER_MODE: async
+    ASGARDEO_ISSUER: ""
+    ASGARDEO_CLIENT_ID: ""
+    ASGARDEO_API_AUDIENCE: ""
+    ASGARDEO_ROOT_ORGANIZATION_ID: ""
+    ASGARDEO_SCOPES: "openid profile email apps:read apps:create deployments:read deployments:write deployments:delete builds:read builds:start logs:read incidents:read incidents:manage rca:read rca:run rca:chat:read rca:chat:write members:manage secrets:write"
+    AUTH_CALLBACK_URL: http://localhost:3000/auth/callback
+    APP_UI_URL: http://localhost:3000/auth/me
+    AUTH_POST_LOGOUT_URL: http://localhost:3000/auth/me
+    AUTH_COOKIE_SECURE: "false"
+    APP_UI_ORIGINS: http://localhost:3000
 
 rca-agent:
   image:
@@ -72,6 +101,7 @@ rca-agent:
     RCA_AGENT_POLL_INTERVAL_SECONDS: "10"
     RCA_LLM_PROVIDER: gemini
     RCA_LLM_MODEL: gemini-1.5-flash
+    RCA_LLM_TIMEOUT_SECONDS: "30"
 
 mcp-server:
   image:

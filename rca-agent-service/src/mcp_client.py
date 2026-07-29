@@ -7,11 +7,13 @@ import httpx
 
 
 class MCPClient:
-    def __init__(self, url: str, timeout: float = 30.0):
+    def __init__(self, url: str, token: str, timeout: float = 30.0):
         self.url = url
         self.timeout = timeout
         self._ids = itertools.count(1)
-        self._client = httpx.AsyncClient(timeout=timeout)
+        self._client = httpx.AsyncClient(
+            timeout=timeout, headers={"Authorization": f"Bearer {token}"}
+        )
 
     async def close(self) -> None:
         await self._client.aclose()

@@ -1,4 +1,4 @@
-import * as k8s from '@kubernetes/client-node';
+import * as k8s from "@kubernetes/client-node";
 
 interface BuildConfigMapManifestInput {
   name: string;
@@ -12,8 +12,8 @@ export function buildConfigMapManifest({
   data,
 }: BuildConfigMapManifestInput): k8s.V1ConfigMap {
   return {
-    apiVersion: 'v1',
-    kind: 'ConfigMap',
+    apiVersion: "v1",
+    kind: "ConfigMap",
     metadata: {
       name,
       labels,

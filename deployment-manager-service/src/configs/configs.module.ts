@@ -1,6 +1,6 @@
-import { Module } from '@nestjs/common';
-import { ConfigsController } from './configs.controller';
-import { ConfigsService } from './configs.service';
+import { Module } from "@nestjs/common";
+import { ConfigsController } from "./configs.controller";
+import { ConfigsService } from "./configs.service";
 
 @Module({
   controllers: [ConfigsController],

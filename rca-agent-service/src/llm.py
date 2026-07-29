@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from .config import Settings
@@ -28,7 +29,10 @@ class LLMClient:
             f"{prompt}\n\nReturn concise RCA findings grounded only in this JSON:\n"
             f"{payload}"
         )
-        result = await self._llm.ainvoke(message)
+        result = await asyncio.wait_for(
+            self._llm.ainvoke(message),
+            timeout=self.settings.rca_llm_timeout_seconds,
+        )
         return str(result.content)
 
 

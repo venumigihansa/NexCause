@@ -1,0 +1,46 @@
+{{- if .Values.sessionCleanup.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "deployment-manager.fullname" . }}-session-cleanup
+  labels:
+    {{- include "deployment-manager.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.sessionCleanup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 120
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: {{ include "deployment-manager.name" . }}-session-cleanup
+            app.kubernetes.io/instance: {{ .Release.Name }}
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          securityContext:
+            {{- toYaml .Values.global.podSecurityContext | nindent 12 }}
+          containers:
+            - name: cleanup
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: ["npm", "run", "auth:sessions:cleanup"]
+              securityContext:
+                {{- toYaml (mergeOverwrite (deepCopy .Values.global.containerSecurityContext) .Values.containerSecurityContext) | nindent 16 }}
+              envFrom:
+                - configMapRef:
+                    name: {{ include "deployment-manager.fullname" . }}
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ default (include "rca-platform.databaseSecretName" .) .Values.global.database.deploymentManagerSecretName }}
+                      key: {{ .Values.global.database.secretKey }}
+              resources:
+                requests: { cpu: 25m, memory: 64Mi }
+                limits: { cpu: 100m, memory: 128Mi }
+{{- end }}

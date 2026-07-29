@@ -1,5 +1,5 @@
-import { IncidentSeverity } from '@prisma/client';
-import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IncidentSeverity } from "@prisma/client";
+import { IsEnum, IsOptional, IsString, MaxLength } from "class-validator";
 
 export class CreateIncidentDto {
   @IsOptional()

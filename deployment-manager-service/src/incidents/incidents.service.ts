@@ -5,18 +5,19 @@ import {
   NotFoundException,
   OnModuleDestroy,
   OnModuleInit,
-} from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import {
   DeploymentHealthSample,
   IncidentSeverity,
   IncidentSource,
   IncidentStatus,
   Prisma,
-} from '@prisma/client';
-import { PrismaService } from '../database/prisma.service';
-import { RcaService } from '../rca/rca.service';
-import { CreateIncidentDto } from './dto/create-incident.dto';
+} from "@prisma/client";
+import { PrismaService } from "../database/prisma.service";
+import { TenantContextService } from "../database/tenant-context.service";
+import { RcaService } from "../rca/rca.service";
+import { CreateIncidentDto } from "./dto/create-incident.dto";
 
 interface IncidentSignal {
   ruleKey: string;
@@ -35,6 +36,7 @@ export class IncidentsService implements OnModuleInit, OnModuleDestroy {
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
     private readonly rcaService: RcaService,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
   onModuleInit() {
@@ -65,13 +67,13 @@ export class IncidentsService implements OnModuleInit, OnModuleDestroy {
   async findAll(status?: IncidentStatus) {
     return this.prisma.incident.findMany({
       where: status ? { status } : undefined,
-      orderBy: { openedAt: 'desc' },
+      orderBy: { openedAt: "desc" },
       include: {
         app: true,
         deployment: true,
         latestHealthSample: true,
         rcaRuns: {
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: "desc" },
         },
       },
     });
@@ -86,7 +88,7 @@ export class IncidentsService implements OnModuleInit, OnModuleDestroy {
         deployment: true,
         latestHealthSample: true,
         rcaRuns: {
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: "desc" },
           include: {
             evidenceSnapshot: true,
           },
@@ -119,7 +121,7 @@ export class IncidentsService implements OnModuleInit, OnModuleDestroy {
         summary: createIncidentDto.summary,
         metadata: {
           deploymentName: deployment.kubernetesDeployment,
-          createdBy: 'manual-api',
+          createdBy: "manual-api",
         },
       },
     });
@@ -149,17 +151,28 @@ export class IncidentsService implements OnModuleInit, OnModuleDestroy {
     this.isDetecting = true;
 
     try {
-      const deploymentIds = await this.getDeploymentIdsWithRecentSamples();
-
-      await Promise.all(
-        deploymentIds.map((deploymentId) =>
-          this.detectDeploymentIncidents(deploymentId).catch((error) => {
-            this.logger.warn(
-              `Failed to detect incidents for deployment ${deploymentId}: ${getErrorMessage(error)}`,
+      const workspaces = await this.prisma.workspace.findMany({
+        where: { status: "active" },
+        select: { id: true },
+      });
+      for (const workspace of workspaces) {
+        await this.tenantContext.run(
+          { workspaceId: workspace.id },
+          async () => {
+            const deploymentIds =
+              await this.getDeploymentIdsWithRecentSamples();
+            await Promise.all(
+              deploymentIds.map((deploymentId) =>
+                this.detectDeploymentIncidents(deploymentId).catch((error) => {
+                  this.logger.warn(
+                    `Failed to detect incidents for deployment ${deploymentId}: ${getErrorMessage(error)}`,
+                  );
+                }),
+              ),
             );
-          }),
-        ),
-      );
+          },
+        );
+      }
     } finally {
       this.isDetecting = false;
     }
@@ -168,7 +181,7 @@ export class IncidentsService implements OnModuleInit, OnModuleDestroy {
   private async detectDeploymentIncidents(deploymentId: string) {
     const samples = await this.prisma.deploymentHealthSample.findMany({
       where: { deploymentId },
-      orderBy: { collectedAt: 'desc' },
+      orderBy: { collectedAt: "desc" },
       take: 2,
       include: {
         deployment: true,
@@ -231,7 +244,7 @@ export class IncidentsService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (this.isAutoRcaEnabled()) {
-      await this.rcaService.startForIncident(incident.id, 'automatic');
+      await this.rcaService.startForIncident(incident.id, "automatic");
     }
   }
 
@@ -242,9 +255,9 @@ export class IncidentsService implements OnModuleInit, OnModuleDestroy {
           gte: minutesAgo(10),
         },
       },
-      distinct: ['deploymentId'],
+      distinct: ["deploymentId"],
       select: { deploymentId: true },
-      orderBy: { deploymentId: 'asc' },
+      orderBy: { deploymentId: "asc" },
     });
 
     return samples.map((sample) => sample.deploymentId);
@@ -268,15 +281,17 @@ export class IncidentsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private isDetectionEnabled(): boolean {
-    return this.configService.get<boolean>('incidentDetectionEnabled') ?? true;
+    return this.configService.get<boolean>("incidentDetectionEnabled") ?? true;
   }
 
   private isAutoRcaEnabled(): boolean {
-    return this.configService.get<boolean>('autoRcaEnabled') ?? true;
+    return this.configService.get<boolean>("autoRcaEnabled") ?? true;
   }
 
   private getDetectionIntervalSeconds(): number {
-    return this.configService.get<number>('incidentDetectionIntervalSeconds') ?? 60;
+    return (
+      this.configService.get<number>("incidentDetectionIntervalSeconds") ?? 60
+    );
   }
 }
 
@@ -291,36 +306,36 @@ function buildSignals(
     latest.readyReplicas < latest.desiredReplicas
   ) {
     signals.push({
-      ruleKey: 'ready-replicas-below-desired',
+      ruleKey: "ready-replicas-below-desired",
       severity: IncidentSeverity.critical,
-      title: 'Deployment has unavailable replicas',
+      title: "Deployment has unavailable replicas",
       summary: `Ready replicas ${latest.readyReplicas}/${latest.desiredReplicas}.`,
     });
   }
 
   if (latest.warningEventCount > 0) {
     signals.push({
-      ruleKey: 'kubernetes-warning-events',
+      ruleKey: "kubernetes-warning-events",
       severity: IncidentSeverity.warning,
-      title: 'Deployment has Kubernetes warning events',
+      title: "Deployment has Kubernetes warning events",
       summary: `${latest.warningEventCount} warning event(s) were observed in the latest health sample.`,
     });
   }
 
   if (previous && latest.restartCount > previous.restartCount) {
     signals.push({
-      ruleKey: 'container-restarts-increased',
+      ruleKey: "container-restarts-increased",
       severity: IncidentSeverity.warning,
-      title: 'Container restart count increased',
+      title: "Container restart count increased",
       summary: `Container restarts increased from ${previous.restartCount} to ${latest.restartCount}.`,
     });
   }
 
-  if (latest.status === 'failed' || latest.status === 'warning') {
+  if (latest.status === "failed" || latest.status === "warning") {
     signals.push({
       ruleKey: `health-status-${latest.status}`,
       severity:
-        latest.status === 'failed'
+        latest.status === "failed"
           ? IncidentSeverity.critical
           : IncidentSeverity.warning,
       title: `Deployment health status is ${latest.status}`,
@@ -365,5 +380,5 @@ function getErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  return 'Unknown error';
+  return "Unknown error";
 }

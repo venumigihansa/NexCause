@@ -1,6 +1,15 @@
 enabled: false
 image: { repository: postgres, tag: "17", pullPolicy: IfNotPresent }
-auth: { username: deployment_manager, password: "", database: deployment_manager }
+auth:
+  username: deployment_manager
+  password: ""
+  database: deployment_manager
+  adminUsername: postgres
+  adminPassword: ""
+  migratorPassword: ""
+  agentPassword: ""
+  mcpPassword: ""
+  sslMode: disable
 service: { port: 5432 }
 persistence: { enabled: true, size: 8Gi, storageClass: "" }
 resources:

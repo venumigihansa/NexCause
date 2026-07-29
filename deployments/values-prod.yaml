@@ -1,3 +1,38 @@
+global:
+  database:
+    deploymentManagerSecretName: rca-platform-database-deployment-manager
+    migratorSecretName: rca-platform-database-migrator
+    agentSecretName: rca-platform-database-agent
+    mcpSecretName: rca-platform-database-mcp
+  externalSecrets:
+    enabled: true
+    mappings:
+      - name: rca-asgardeo
+        targetSecretName: rca-asgardeo
+        data:
+          - { secretKey: ASGARDEO_CLIENT_SECRET, remoteKey: /rca/production/asgardeo, property: clientSecret }
+          - { secretKey: AUTH_SESSION_ENCRYPTION_KEY, remoteKey: /rca/production/asgardeo, property: sessionEncryptionKey }
+      - name: rca-internal-auth
+        targetSecretName: rca-internal-auth
+        data:
+          - { secretKey: INTERNAL_SERVICE_JWT_SECRET, remoteKey: /rca/production/internal-auth, property: jwtSecret }
+      - name: rca-platform-database-deployment-manager
+        targetSecretName: rca-platform-database-deployment-manager
+        data:
+          - { secretKey: DATABASE_URL, remoteKey: /rca/production/database, property: deploymentManagerUrl }
+      - name: rca-platform-database-migrator
+        targetSecretName: rca-platform-database-migrator
+        data:
+          - { secretKey: DATABASE_URL, remoteKey: /rca/production/database, property: migratorUrl }
+      - name: rca-platform-database-agent
+        targetSecretName: rca-platform-database-agent
+        data:
+          - { secretKey: DATABASE_URL, remoteKey: /rca/production/database, property: agentUrl }
+      - name: rca-platform-database-mcp
+        targetSecretName: rca-platform-database-mcp
+        data:
+          - { secretKey: DATABASE_URL, remoteKey: /rca/production/database, property: mcpUrl }
+
 postgres:
   enabled: false
 
@@ -25,6 +60,12 @@ deployment-manager:
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
+  config:
+    AUTH_CALLBACK_URL: https://REPLACE_WITH_MANAGER_HOSTNAME/auth/callback
+    APP_UI_URL: https://REPLACE_WITH_UI_HOSTNAME
+    AUTH_POST_LOGOUT_URL: https://REPLACE_WITH_UI_HOSTNAME
+    AUTH_COOKIE_SECURE: "true"
+    APP_UI_ORIGINS: https://REPLACE_WITH_UI_HOSTNAME
 
 rca-agent:
   image:

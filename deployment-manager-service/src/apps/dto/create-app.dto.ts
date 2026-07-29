@@ -1,5 +1,12 @@
-import { AppSourceType } from '@prisma/client';
-import { IsEnum, IsInt, IsOptional, IsString, IsUrl, Min } from 'class-validator';
+import { AppSourceType } from "@prisma/client";
+import {
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUrl,
+  Min,
+} from "class-validator";
 
 export class CreateAppDto {
   @IsString()
@@ -23,7 +30,7 @@ export class CreateAppDto {
 
   @IsOptional()
   @IsUrl({
-    protocols: ['https'],
+    protocols: ["https"],
     require_protocol: true,
   })
   repoUrl?: string;

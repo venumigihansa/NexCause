@@ -44,8 +44,23 @@ spec:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "rca-platform.databaseSecretName" . }}
+                  name: {{ default (include "rca-platform.databaseSecretName" .) .Values.global.database.deploymentManagerSecretName }}
                   key: {{ .Values.global.database.secretKey }}
+            - name: ASGARDEO_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.existingSecret.name }}
+                  key: {{ .Values.auth.existingSecret.clientSecretKey }}
+            - name: AUTH_SESSION_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.existingSecret.name }}
+                  key: {{ .Values.auth.existingSecret.encryptionKeyKey }}
+            - name: INTERNAL_SERVICE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.internalAuth.secretName }}
+                  key: {{ .Values.global.internalAuth.secretKey }}
           readinessProbe:
             httpGet: { path: /readyz, port: http }
             initialDelaySeconds: 5

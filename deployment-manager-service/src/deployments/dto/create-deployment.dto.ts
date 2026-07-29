@@ -1,4 +1,4 @@
-import { IsInt, IsObject, IsOptional, IsString, Min } from 'class-validator';
+import { IsInt, IsObject, IsOptional, IsString, Min } from "class-validator";
 
 export class CreateDeploymentDto {
   @IsOptional()
@@ -34,8 +34,4 @@ export class CreateDeploymentDto {
   @IsOptional()
   @IsObject()
   secretFiles?: Record<string, string>;
-
-  @IsOptional()
-  @IsString()
-  namespace?: string;
 }

@@ -1,6 +1,10 @@
 global:
   database:
     bundled: true
+    deploymentManagerSecretName: rca-platform-database
+    migratorSecretName: rca-platform-database-migrator
+    agentSecretName: rca-platform-database-agent
+    mcpSecretName: rca-platform-database-mcp
 
 gateway:
   enabled: true
@@ -21,6 +25,12 @@ postgres:
     username: deployment_manager
     password: deployment_manager
     database: deployment_manager
+    adminUsername: postgres
+    adminPassword: postgres-local-development
+    migratorPassword: migrator-local-development
+    agentPassword: agent-local-development
+    mcpPassword: mcp-local-development
+    sslMode: disable
   persistence:
     enabled: true
     size: 2Gi
@@ -45,6 +55,11 @@ deployment-manager:
     type: ClusterIP
     nodePort: null
   config:
+    AUTH_CALLBACK_URL: https://manager.rca.local:8443/auth/callback
+    APP_UI_URL: https://manager.rca.local:8443/auth/me
+    AUTH_POST_LOGOUT_URL: https://manager.rca.local:8443/auth/me
+    AUTH_COOKIE_SECURE: "true"
+    APP_UI_ORIGINS: https://manager.rca.local:8443
     DEFAULT_KUBERNETES_NAMESPACE: apps
     LOCAL_REGISTRY_HOST: localhost:30500
     BUILDPACK_BUILDER_IMAGE: gcr.io/buildpacks/builder

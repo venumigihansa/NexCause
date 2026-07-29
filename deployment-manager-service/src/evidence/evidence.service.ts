@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, RuntimeConfigType } from '@prisma/client';
-import { PrismaService } from '../database/prisma.service';
-import { KubernetesService } from '../kubernetes/kubernetes.service';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma, RuntimeConfigType } from "@prisma/client";
+import { PrismaService } from "../database/prisma.service";
+import { KubernetesService } from "../kubernetes/kubernetes.service";
 
 export interface EvidenceWindowOptions {
   triggeredAt?: Date;
@@ -35,49 +35,55 @@ export class EvidenceService {
   ) {
     const deployment = await this.findDeploymentForEvidence(deploymentId);
     const labels = this.kubernetesService.buildManagedLabels(
+      deployment.workspaceId,
       deployment.appId,
       deployment.id,
     );
     const collectedAt = new Date();
     const window = buildEvidenceWindow(windowOptions, collectedAt);
     const sinceSeconds = secondsBetween(window.start, collectedAt);
-    const [status, pods, rawEvents, rawLogs, healthSamples] = await Promise.all([
-      collectOrError(() =>
-        this.kubernetesService.getDeploymentStatus(
-          deployment.namespace,
-          deployment.kubernetesDeployment,
+    const [status, pods, rawEvents, rawLogs, healthSamples] = await Promise.all(
+      [
+        collectOrError(() =>
+          this.kubernetesService.getDeploymentStatus(
+            deployment.namespace,
+            deployment.kubernetesDeployment,
+          ),
         ),
-      ),
-      collectOrError(() =>
-        this.kubernetesService.listDeploymentPods(deployment.namespace, labels),
-      ),
-      collectOrError(() =>
-        this.kubernetesService.listDeploymentEvents(
-          deployment.namespace,
-          deployment.kubernetesDeployment,
-          labels,
+        collectOrError(() =>
+          this.kubernetesService.listDeploymentPods(
+            deployment.namespace,
+            labels,
+          ),
         ),
-      ),
-      collectOrError(() =>
-        this.kubernetesService.getDeploymentEvidenceLogs(
-          deployment.namespace,
-          labels,
-          500,
-          sinceSeconds,
+        collectOrError(() =>
+          this.kubernetesService.listDeploymentEvents(
+            deployment.namespace,
+            deployment.kubernetesDeployment,
+            labels,
+          ),
         ),
-      ),
-      this.prisma.deploymentHealthSample.findMany({
-        where: {
-          deploymentId: deployment.id,
-          collectedAt: {
-            gte: window.start,
-            lte: window.end,
+        collectOrError(() =>
+          this.kubernetesService.getDeploymentEvidenceLogs(
+            deployment.namespace,
+            labels,
+            500,
+            sinceSeconds,
+          ),
+        ),
+        this.prisma.deploymentHealthSample.findMany({
+          where: {
+            deploymentId: deployment.id,
+            collectedAt: {
+              gte: window.start,
+              lte: window.end,
+            },
           },
-        },
-        orderBy: { collectedAt: 'desc' },
-        take: 120,
-      }),
-    ]);
+          orderBy: { collectedAt: "desc" },
+          take: 120,
+        }),
+      ],
+    );
     const events = filterEventsByWindow(rawEvents, window);
     const logs = filterLogsByWindow(rawLogs, window);
 
@@ -173,7 +179,7 @@ export class EvidenceService {
 
     return this.prisma.evidenceSnapshot.findMany({
       where: { deploymentId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       select: {
         id: true,
         deploymentId: true,
@@ -248,12 +254,12 @@ function deriveEvidenceStatus(
 
   if (
     isRecord(liveStatus) &&
-    typeof liveStatus.readyReplicas === 'number' &&
-    typeof liveStatus.desiredReplicas === 'number' &&
+    typeof liveStatus.readyReplicas === "number" &&
+    typeof liveStatus.desiredReplicas === "number" &&
     liveStatus.desiredReplicas > 0 &&
     liveStatus.readyReplicas >= liveStatus.desiredReplicas
   ) {
-    return 'running';
+    return "running";
   }
 
   return deploymentStatus;
@@ -271,7 +277,8 @@ function buildEvidenceSummary(
 
   const podCount = Array.isArray(pods) ? pods.length : 0;
   const warningEvents = Array.isArray(events)
-    ? events.filter((event) => isRecord(event) && event.type === 'Warning').length
+    ? events.filter((event) => isRecord(event) && event.type === "Warning")
+        .length
     : 0;
 
   return `Deployment evidence collected with status ${status}, ${podCount} pod(s), and ${warningEvents} warning event(s).`;
@@ -324,11 +331,11 @@ function toPrismaJson(value: unknown): Prisma.InputJsonObject {
 }
 
 function isCollectionError(value: unknown): value is { error: string } {
-  return isRecord(value) && typeof value.error === 'string';
+  return isRecord(value) && typeof value.error === "string";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function getErrorMessage(error: unknown): string {
@@ -336,7 +343,7 @@ function getErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  return 'Unknown error';
+  return "Unknown error";
 }
 
 function buildEvidenceWindow(
@@ -361,7 +368,7 @@ function buildEvidenceWindow(
     end,
     lookbackMinutes,
     lookaheadMinutes,
-    reason: options.reason ?? 'manual-or-current-evidence',
+    reason: options.reason ?? "manual-or-current-evidence",
   };
 }
 
@@ -400,7 +407,7 @@ function filterLogsByWindow<T>(
   }
 
   return podLogs.map((podLog) => {
-    if (!isRecord(podLog) || typeof podLog.logs !== 'string') {
+    if (!isRecord(podLog) || typeof podLog.logs !== "string") {
       return podLog;
     }
 
@@ -411,15 +418,18 @@ function filterLogsByWindow<T>(
   }) as T;
 }
 
-function filterTimestampedLogLines(logs: string, window: EvidenceWindow): string {
+function filterTimestampedLogLines(
+  logs: string,
+  window: EvidenceWindow,
+): string {
   return logs
-    .split('\n')
+    .split("\n")
     .filter((line) => {
       const timestamp = parseDateValue(line.split(/\s+/, 1)[0]);
 
       return !timestamp || isWithinWindow(timestamp, window);
     })
-    .join('\n');
+    .join("\n");
 }
 
 function isWithinWindow(value: Date, window: EvidenceWindow): boolean {
@@ -434,7 +444,7 @@ function parseDateValue(value: unknown): Date | undefined {
     return Number.isNaN(value.getTime()) ? undefined : value;
   }
 
-  if (typeof value !== 'string') {
+  if (typeof value !== "string") {
     return undefined;
   }
 

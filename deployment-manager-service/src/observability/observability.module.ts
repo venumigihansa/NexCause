@@ -1,8 +1,8 @@
-import { Module } from '@nestjs/common';
-import { DatabaseModule } from '../database/database.module';
-import { KubernetesModule } from '../kubernetes/kubernetes.module';
-import { ObservabilityController } from './observability.controller';
-import { ObservabilityService } from './observability.service';
+import { Module } from "@nestjs/common";
+import { DatabaseModule } from "../database/database.module";
+import { KubernetesModule } from "../kubernetes/kubernetes.module";
+import { ObservabilityController } from "./observability.controller";
+import { ObservabilityService } from "./observability.service";
 
 @Module({
   imports: [DatabaseModule, KubernetesModule],

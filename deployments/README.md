@@ -77,6 +77,20 @@ curl --resolve manager.rca.local:443:<GATEWAY-IP> \
 
 The Kind profile uses a self-signed certificate for `manager.rca.local` and `*.apps.rca.local`. Browsers will warn until the local certificate is trusted. `/etc/hosts` does not support wildcard entries; add `manager.rca.local` explicitly or use `curl --resolve`.
 
+### Reset the development database
+
+This permanently deletes local RCA database data and must never be used for a
+production namespace:
+
+```bash
+helm uninstall rca-platform --namespace rca-platform
+kubectl delete pvc --namespace rca-platform \
+  -l app.kubernetes.io/name=postgres
+```
+
+Reinstalling the chart initializes the fixed PostgreSQL version and creates the
+dedicated development-only database roles.
+
 The Kind profile also installs the shared OpenTelemetry Collector, Prometheus, Loki, Tempo, and Grafana. Access Grafana with:
 
 ```bash
@@ -106,8 +120,12 @@ Bundled Postgres and the local registry are disabled in `values-prod.yaml`. Befo
 
 3. Provision a `letsencrypt-production` ClusterIssuer using Route 53 DNS-01 and IAM scoped to the hosted zone.
 4. Create Route 53 records for the manager hostname and application wildcard that point to the generated NLB.
-5. Create a Secret with a `DATABASE_URL` key; it defaults to `<release-name>-database` or can be set through `global.database.secretName`.
-6. Configure immutable ECR image references and provide the agent LLM Secret.
+5. Install External Secrets Operator and create the
+   `aws-secrets-manager` `ClusterSecretStore` using EKS Pod Identity or IRSA.
+6. Populate the AWS secret paths and JSON properties documented in
+   `docs/authentication-and-tenancy.md`; the chart synchronizes the Asgardeo,
+   internal JWT, and four restricted database Secrets.
+7. Configure immutable ECR image references and provide the agent LLM Secret.
 
 The production values intentionally contain invalid hostname placeholders. Helm schema validation prevents installation until both are replaced:
 
@@ -123,6 +141,8 @@ helm upgrade --install rca-platform ./deployments \
 The EKS-only `GatewayParameters` configures kgateway's generated `LoadBalancer` Service for an internet-facing AWS NLB. TLS is passed through the NLB and terminated by Envoy with the Secret maintained by cert-manager.
 
 See [Gateway operations](../docs/gateway.md) for ownership, troubleshooting, and readiness checks.
+See [Authentication and tenancy operations](../docs/authentication-and-tenancy.md)
+before enabling the public Gateway.
 
 ## Validation
 

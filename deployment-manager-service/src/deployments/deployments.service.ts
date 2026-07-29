@@ -2,24 +2,26 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import {
   BuildStatus,
   Deployment,
   DeploymentStatus,
   Prisma,
   RuntimeConfigType,
-} from '@prisma/client';
-import { randomUUID } from 'node:crypto';
-import { AppsService } from '../apps/apps.service';
-import { PrismaService } from '../database/prisma.service';
-import { KubernetesService } from '../kubernetes/kubernetes.service';
-import { KubernetesResourceNames } from '../kubernetes/types/kubernetes-resource-names';
-import { ObservabilityService } from '../observability/observability.service';
-import { CreateDeploymentDto } from './dto/create-deployment.dto';
-import { ScaleDeploymentDto } from './dto/scale-deployment.dto';
-import { StartDeploymentDto } from './dto/start-deployment.dto';
+} from "@prisma/client";
+import { randomUUID } from "node:crypto";
+import { AppsService } from "../apps/apps.service";
+import { AuthorizationService } from "../auth/authorization.service";
+import { PrismaService } from "../database/prisma.service";
+import { TenantContextService } from "../database/tenant-context.service";
+import { KubernetesService } from "../kubernetes/kubernetes.service";
+import { KubernetesResourceNames } from "../kubernetes/types/kubernetes-resource-names";
+import { ObservabilityService } from "../observability/observability.service";
+import { CreateDeploymentDto } from "./dto/create-deployment.dto";
+import { ScaleDeploymentDto } from "./dto/scale-deployment.dto";
+import { StartDeploymentDto } from "./dto/start-deployment.dto";
 
 @Injectable()
 export class DeploymentsService {
@@ -29,24 +31,39 @@ export class DeploymentsService {
     private readonly kubernetesService: KubernetesService,
     private readonly observabilityService: ObservabilityService,
     private readonly prisma: PrismaService,
+    private readonly tenantContext: TenantContextService,
+    private readonly authorization: AuthorizationService,
   ) {}
 
   // Creates a deployment record, then creates the matching Kubernetes resources.
   async create(appId: string, createDeploymentDto: CreateDeploymentDto) {
+    if (
+      Object.keys(createDeploymentDto.secrets ?? {}).length > 0 ||
+      Object.keys(createDeploymentDto.secretFiles ?? {}).length > 0
+    ) {
+      this.authorization.requirePermissions("secrets:write");
+    }
     const app = await this.appsService.findOneOrThrow(appId);
     const deploymentId = randomUUID();
     const image = await this.resolveDeploymentImage(appId, createDeploymentDto);
     const port = createDeploymentDto.port ?? app.defaultPort;
-    const namespace =
-      createDeploymentDto.namespace ??
-      this.configService.get<string>('defaultNamespace') ??
-      'apps';
+    const workspaceId = this.tenantContext.requireWorkspaceId();
+    const namespace = await this.workspaceNamespace(workspaceId);
     const replicas = createDeploymentDto.replicas ?? 1;
     const secrets = normalizeEnv(createDeploymentDto.secrets ?? {});
     const files = normalizeFileConfig(createDeploymentDto.files ?? {});
-    const secretFiles = normalizeFileConfig(createDeploymentDto.secretFiles ?? {});
-    const names = this.kubernetesService.buildResourceNames(app.name, deploymentId);
-    const labels = this.kubernetesService.buildManagedLabels(app.id, deploymentId);
+    const secretFiles = normalizeFileConfig(
+      createDeploymentDto.secretFiles ?? {},
+    );
+    const names = this.kubernetesService.buildResourceNames(
+      app.name,
+      deploymentId,
+    );
+    const labels = this.kubernetesService.buildManagedLabels(
+      workspaceId,
+      app.id,
+      deploymentId,
+    );
     const env = {
       ...normalizeEnv(createDeploymentDto.env ?? {}),
       ...this.observabilityService.buildTelemetryEnv({
@@ -66,7 +83,7 @@ export class DeploymentsService {
 
     if (!port) {
       throw new BadRequestException(
-        'Deployment port is required when the app has no default port',
+        "Deployment port is required when the app has no default port",
       );
     }
 
@@ -132,7 +149,7 @@ export class DeploymentsService {
 
     const deployments = await this.prisma.deployment.findMany({
       where: { appId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       include: {
         runtimeConfigs: true,
       },
@@ -183,7 +200,10 @@ export class DeploymentsService {
     const deployment = await this.findOneOrThrow(id);
     const labels = this.getManagedLabels(deployment);
 
-    return this.kubernetesService.getDeploymentLogs(deployment.namespace, labels);
+    return this.kubernetesService.getDeploymentLogs(
+      deployment.namespace,
+      labels,
+    );
   }
 
   // Lists pods currently selected by this deployment's managed labels.
@@ -321,9 +341,21 @@ export class DeploymentsService {
 
   private getManagedLabels(deployment: Deployment): Record<string, string> {
     return this.kubernetesService.buildManagedLabels(
+      deployment.workspaceId,
       deployment.appId,
       deployment.id,
     );
+  }
+
+  private async workspaceNamespace(workspaceId: string): Promise<string> {
+    const workspace = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { kubernetesNamespace: true },
+    });
+    if (!workspace) {
+      throw new NotFoundException("Workspace was not found");
+    }
+    return workspace.kubernetesNamespace;
   }
 
   private async resolveDeploymentImage(
@@ -331,11 +363,13 @@ export class DeploymentsService {
     createDeploymentDto: CreateDeploymentDto,
   ): Promise<string> {
     if (createDeploymentDto.image && createDeploymentDto.buildId) {
-      throw new BadRequestException('Provide either image or buildId, not both');
+      throw new BadRequestException(
+        "Provide either image or buildId, not both",
+      );
     }
 
     if (!createDeploymentDto.image && !createDeploymentDto.buildId) {
-      throw new BadRequestException('Either image or buildId is required');
+      throw new BadRequestException("Either image or buildId is required");
     }
 
     if (createDeploymentDto.image) {
@@ -347,19 +381,23 @@ export class DeploymentsService {
     });
 
     if (!build) {
-      throw new NotFoundException(`Build ${createDeploymentDto.buildId} was not found`);
+      throw new NotFoundException(
+        `Build ${createDeploymentDto.buildId} was not found`,
+      );
     }
 
     if (build.appId !== appId) {
-      throw new BadRequestException('Build does not belong to this app');
+      throw new BadRequestException("Build does not belong to this app");
     }
 
     if (build.status !== BuildStatus.succeeded) {
-      throw new BadRequestException('Build must be succeeded before deployment');
+      throw new BadRequestException(
+        "Build must be succeeded before deployment",
+      );
     }
 
     if (!build.image) {
-      throw new BadRequestException('Build has no deployable image');
+      throw new BadRequestException("Build has no deployable image");
     }
 
     return build.image;
@@ -414,14 +452,14 @@ function normalizeFileConfig(files: Record<string, string>): {
 }
 
 function validateRelativeFilePath(path: string): void {
-  if (path.startsWith('/') || path.includes('..')) {
+  if (path.startsWith("/") || path.includes("..")) {
     throw new BadRequestException(
-      'File config paths must be relative and cannot contain ..',
+      "File config paths must be relative and cannot contain ..",
     );
   }
 
   if (!path.trim()) {
-    throw new BadRequestException('File config paths cannot be empty');
+    throw new BadRequestException("File config paths cannot be empty");
   }
 }
 
@@ -431,7 +469,10 @@ function buildRuntimeConfigRecords(
   files: Record<string, string>,
   secretFiles: Record<string, string>,
 ): Array<{ type: RuntimeConfigType; data: Prisma.InputJsonObject }> {
-  const records: Array<{ type: RuntimeConfigType; data: Prisma.InputJsonObject }> = [];
+  const records: Array<{
+    type: RuntimeConfigType;
+    data: Prisma.InputJsonObject;
+  }> = [];
 
   if (Object.keys(env).length > 0) {
     records.push({
@@ -460,9 +501,11 @@ function buildRuntimeConfigRecords(
   return records;
 }
 
-function sanitizeDeployment<T extends { runtimeConfigs?: Array<{ type: RuntimeConfigType; data: unknown }> }>(
-  deployment: T,
-): T {
+function sanitizeDeployment<
+  T extends {
+    runtimeConfigs?: Array<{ type: RuntimeConfigType; data: unknown }>;
+  },
+>(deployment: T): T {
   if (!deployment.runtimeConfigs) {
     return deployment;
   }
@@ -508,12 +551,16 @@ function redactSecretRuntimeConfig(data: unknown): {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function deploymentToResourceNames(deployment: Deployment): KubernetesResourceNames {
+function deploymentToResourceNames(
+  deployment: Deployment,
+): KubernetesResourceNames {
   if (!deployment.kubernetesConfigMap) {
-    throw new BadRequestException('Deployment has no Kubernetes ConfigMap name');
+    throw new BadRequestException(
+      "Deployment has no Kubernetes ConfigMap name",
+    );
   }
 
   return {

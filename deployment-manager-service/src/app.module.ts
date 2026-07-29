@@ -20,6 +20,8 @@ import { RcaModule } from "./rca/rca.module";
 import { RegistryModule } from "./registry/registry.module";
 import { RuntimeModule } from "./runtime/runtime.module";
 import { SourceControlModule } from "./source-control/source-control.module";
+import { AuthModule } from "./auth/auth.module";
+import authConfig from "./auth/auth.config";
 
 @Module({
   imports: [
@@ -32,9 +34,11 @@ import { SourceControlModule } from "./source-control/source-control.module";
         observabilityConfig,
         rcaConfig,
         registryConfig,
+        authConfig,
       ],
     }),
     DatabaseModule,
+    AuthModule,
     HealthModule,
     KubernetesModule,
     AppsModule,

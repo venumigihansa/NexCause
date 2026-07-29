@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"rca-mcp-server/internal/serviceauth"
 	"time"
 )
 
@@ -20,6 +22,27 @@ type PostgresStore struct {
 
 func NewPostgresStore(db *sql.DB) *PostgresStore {
 	return &PostgresStore{db: db}
+}
+
+func (s *PostgresStore) tenantTx(ctx context.Context) (*sql.Tx, error) {
+	workspaceID, ok := serviceauth.WorkspaceID(ctx)
+	if !ok {
+		return nil, fmt.Errorf("workspace context is required")
+	}
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(
+		ctx,
+		`SELECT set_config('app.workspace_id', $1, true),
+		        set_config('statement_timeout', '10000', true)`,
+		workspaceID,
+	); err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+	return tx, nil
 }
 
 type RCAContextRecord struct {

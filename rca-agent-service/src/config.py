@@ -15,8 +15,14 @@ class Settings(BaseSettings):
     rca_max_verifier_retries: int = 1
     rca_llm_provider: str = "gemini"
     rca_llm_model: str = "gemini-1.5-flash"
+    rca_llm_timeout_seconds: float = 30.0
     rca_llm_api_key: str | None = None
     langgraph_checkpoint_db_url: str | None = None
+    internal_service_jwt_secret: str
+    database_pool_min_size: int = 1
+    database_pool_max_size: int = 5
+    database_pool_timeout_seconds: float = 5.0
+    database_query_timeout_ms: int = 10_000
 
 
 settings = Settings()

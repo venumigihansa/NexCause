@@ -1,13 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import * as k8s from '@kubernetes/client-node';
-import { buildBuildJobManifest } from './builders/build-job-manifest.builder';
-import { buildBuildpackJobManifest } from './builders/buildpack-job-manifest.builder';
-import { buildConfigMapManifest } from './builders/configmap-manifest.builder';
-import { buildDeploymentManifest } from './builders/deployment-manifest.builder';
-import { buildNamespaceManifest } from './builders/namespace-manifest.builder';
-import { buildSecretManifest } from './builders/secret-manifest.builder';
-import { buildServiceManifest } from './builders/service-manifest.builder';
-import { KubernetesResourceNames } from './types/kubernetes-resource-names';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import * as k8s from "@kubernetes/client-node";
+import { buildBuildJobManifest } from "./builders/build-job-manifest.builder";
+import { buildBuildpackJobManifest } from "./builders/buildpack-job-manifest.builder";
+import { buildConfigMapManifest } from "./builders/configmap-manifest.builder";
+import { buildDeploymentManifest } from "./builders/deployment-manifest.builder";
+import { buildNamespaceManifest } from "./builders/namespace-manifest.builder";
+import { buildSecretManifest } from "./builders/secret-manifest.builder";
+import { buildServiceManifest } from "./builders/service-manifest.builder";
+import { KubernetesResourceNames } from "./types/kubernetes-resource-names";
 
 // Shape of the normalized data KubernetesService needs to create resources.
 interface DeployImageInput {
@@ -71,8 +71,11 @@ export class KubernetesService {
   }
 
   // Creates deterministic Kubernetes resource names for one app deployment.
-  buildResourceNames(appName: string, deploymentId: string): KubernetesResourceNames {
-    const appSegment = toDnsSafeName(appName).slice(0, 32) || 'app';
+  buildResourceNames(
+    appName: string,
+    deploymentId: string,
+  ): KubernetesResourceNames {
+    const appSegment = toDnsSafeName(appName).slice(0, 32) || "app";
     const deploymentSegment = deploymentId.slice(0, 8).toLowerCase();
     const base = `${appSegment}-${deploymentSegment}`;
 
@@ -87,34 +90,44 @@ export class KubernetesService {
   }
 
   // Creates labels used to connect Deployments, Pods, Services, and log lookups.
-  buildManagedLabels(appId: string, deploymentId: string): Record<string, string> {
+  buildManagedLabels(
+    workspaceId: string,
+    appId: string,
+    deploymentId: string,
+  ): Record<string, string> {
     return {
-      'app.kubernetes.io/managed-by': 'deployment-manager-service',
-      'rca-platform/app-id': appId,
-      'rca-platform/deployment-id': deploymentId,
+      "app.kubernetes.io/managed-by": "deployment-manager-service",
+      "rca-platform/workspace-id": workspaceId,
+      "rca-platform/app-id": appId,
+      "rca-platform/deployment-id": deploymentId,
     };
   }
 
   // Creates deterministic names for Kubernetes build Jobs.
   buildJobName(appName: string, buildId: string): string {
-    const appSegment = toDnsSafeName(appName).slice(0, 32) || 'app';
+    const appSegment = toDnsSafeName(appName).slice(0, 32) || "app";
     const buildSegment = buildId.slice(0, 8).toLowerCase();
 
     return `${appSegment}-build-${buildSegment}`;
   }
 
   // Creates labels used to find build Jobs and their pods later.
-  buildJobLabels(appId: string, buildId: string): Record<string, string> {
+  buildJobLabels(
+    workspaceId: string,
+    appId: string,
+    buildId: string,
+  ): Record<string, string> {
     return {
-      'app.kubernetes.io/managed-by': 'deployment-manager-service',
-      'rca-platform/app-id': appId,
-      'rca-platform/build-id': buildId,
+      "app.kubernetes.io/managed-by": "deployment-manager-service",
+      "rca-platform/workspace-id": workspaceId,
+      "rca-platform/app-id": appId,
+      "rca-platform/build-id": buildId,
     };
   }
 
   // Creates or updates all Kubernetes resources needed to run an image.
   async deployImage(input: DeployImageInput): Promise<void> {
-    await this.ensureNamespace(input.namespace);
+    await this.ensureNamespace(input.namespace, input.labels);
     await this.upsertConfigMap(input);
     await this.upsertFileConfigMap(input);
     await this.upsertSecret(input);
@@ -125,7 +138,7 @@ export class KubernetesService {
 
   // Creates a Kubernetes Job that clones a repo, builds a Dockerfile, and pushes the image.
   async createBuildJob(input: CreateBuildJobInput): Promise<void> {
-    await this.ensureNamespace(input.namespace);
+    await this.ensureNamespace(input.namespace, input.labels);
 
     const job = buildBuildJobManifest({
       name: input.jobName,
@@ -142,7 +155,7 @@ export class KubernetesService {
 
   // Creates a Kubernetes Job that clones a repo and builds it with Cloud Native Buildpacks.
   async createBuildpackJob(input: CreateBuildpackJobInput): Promise<void> {
-    await this.ensureNamespace(input.namespace);
+    await this.ensureNamespace(input.namespace, input.labels);
 
     const job = buildBuildpackJobManifest({
       name: input.jobName,
@@ -237,7 +250,7 @@ export class KubernetesService {
           template: {
             metadata: {
               annotations: {
-                'kubectl.kubernetes.io/restartedAt': restartedAt,
+                "kubectl.kubernetes.io/restartedAt": restartedAt,
               },
             },
           },
@@ -350,7 +363,10 @@ export class KubernetesService {
   }
 
   // Creates the namespace only when it does not already exist.
-  private async ensureNamespace(namespace: string): Promise<void> {
+  private async ensureNamespace(
+    namespace: string,
+    labels: Record<string, string>,
+  ): Promise<void> {
     try {
       await this.coreApi.readNamespace(namespace);
     } catch (error) {
@@ -358,7 +374,13 @@ export class KubernetesService {
         throw error;
       }
 
-      await this.coreApi.createNamespace(buildNamespaceManifest(namespace));
+      await this.coreApi.createNamespace(
+        buildNamespaceManifest(namespace, {
+          "app.kubernetes.io/managed-by":
+            labels["app.kubernetes.io/managed-by"],
+          "rca-platform/workspace-id": labels["rca-platform/workspace-id"],
+        }),
+      );
     }
   }
 
@@ -411,7 +433,9 @@ export class KubernetesService {
     }
 
     if (!fileConfigMapName) {
-      throw new Error('File config was provided without a Kubernetes ConfigMap name');
+      throw new Error(
+        "File config was provided without a Kubernetes ConfigMap name",
+      );
     }
 
     const configMap = buildConfigMapManifest({
@@ -461,7 +485,9 @@ export class KubernetesService {
     }
 
     if (!secretName) {
-      throw new Error('Secret data was provided without a Kubernetes Secret name');
+      throw new Error(
+        "Secret data was provided without a Kubernetes Secret name",
+      );
     }
 
     const secret = buildSecretManifest({
@@ -511,7 +537,9 @@ export class KubernetesService {
     }
 
     if (!secretFileSecretName) {
-      throw new Error('Secret files were provided without a Kubernetes Secret name');
+      throw new Error(
+        "Secret files were provided without a Kubernetes Secret name",
+      );
     }
 
     const secret = buildSecretManifest({
@@ -554,9 +582,13 @@ export class KubernetesService {
       labels: input.labels,
       configMapName: input.names.configMapName,
       secretName:
-        Object.keys(input.secrets).length > 0 ? input.names.secretName : undefined,
+        Object.keys(input.secrets).length > 0
+          ? input.names.secretName
+          : undefined,
       configFileConfigMapName:
-        input.files.items.length > 0 ? input.names.fileConfigMapName : undefined,
+        input.files.items.length > 0
+          ? input.names.fileConfigMapName
+          : undefined,
       secretFileSecretName:
         input.secretFiles.items.length > 0
           ? input.names.secretFileSecretName
@@ -564,16 +596,16 @@ export class KubernetesService {
       configFileVolume:
         input.files.items.length > 0
           ? {
-              name: 'config-files',
-              mountPath: '/app/config',
+              name: "config-files",
+              mountPath: "/app/config",
               items: input.files.items,
             }
           : undefined,
       secretFileVolume:
         input.secretFiles.items.length > 0
           ? {
-              name: 'secret-files',
-              mountPath: '/app/secrets',
+              name: "secret-files",
+              mountPath: "/app/secrets",
               items: input.secretFiles.items,
             }
           : undefined,
@@ -599,7 +631,10 @@ export class KubernetesService {
         throw error;
       }
 
-      await this.appsApi.createNamespacedDeployment(input.namespace, deployment);
+      await this.appsApi.createNamespacedDeployment(
+        input.namespace,
+        deployment,
+      );
     }
   }
 
@@ -643,7 +678,9 @@ export class KubernetesService {
   }
 
   // Ignores 404 errors during cleanup, because missing resources are already gone.
-  private async deleteIfExists(deleteResource: () => Promise<unknown>): Promise<void> {
+  private async deleteIfExists(
+    deleteResource: () => Promise<unknown>,
+  ): Promise<void> {
     try {
       await deleteResource();
     } catch (error) {
@@ -673,7 +710,7 @@ export class KubernetesService {
         const podName = pod.metadata?.name;
 
         if (!podName) {
-          throw new NotFoundException('A matching pod was missing its name');
+          throw new NotFoundException("A matching pod was missing its name");
         }
 
         const logs = await this.coreApi.readNamespacedPodLog(
@@ -743,29 +780,29 @@ export interface DeploymentEventSummary {
 function toDnsSafeName(value: string): string {
   return value
     .toLowerCase()
-    .replace(/[^a-z0-9-]/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-{2,}/g, '-')
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-")
     .slice(0, 45);
 }
 
 function toLabelSelector(labels: Record<string, string>): string {
   return Object.entries(labels)
     .map(([key, value]) => `${key}=${value}`)
-    .join(',');
+    .join(",");
 }
 
-function mergePatchOptions(): { headers: { 'Content-Type': string } } {
+function mergePatchOptions(): { headers: { "Content-Type": string } } {
   return {
     headers: {
-      'Content-Type': 'application/merge-patch+json',
+      "Content-Type": "application/merge-patch+json",
     },
   };
 }
 
 function toDeploymentPodSummary(pod: k8s.V1Pod): DeploymentPodSummary {
   return {
-    name: pod.metadata?.name ?? '',
+    name: pod.metadata?.name ?? "",
     namespace: pod.metadata?.namespace,
     phase: pod.status?.phase,
     podIP: pod.status?.podIP,
@@ -793,7 +830,9 @@ function toDeploymentPodSummary(pod: k8s.V1Pod): DeploymentPodSummary {
   };
 }
 
-function toDeploymentEventSummary(event: k8s.CoreV1Event): DeploymentEventSummary {
+function toDeploymentEventSummary(
+  event: k8s.CoreV1Event,
+): DeploymentEventSummary {
   return {
     name: event.metadata?.name,
     type: event.type,
@@ -815,18 +854,18 @@ function getEventTime(event: k8s.CoreV1Event): string {
     event.lastTimestamp?.toISOString() ??
     event.firstTimestamp?.toISOString() ??
     event.metadata?.creationTimestamp?.toISOString() ??
-    ''
+    ""
   );
 }
 
 function isKubernetesNotFound(error: unknown): boolean {
   return (
-    typeof error === 'object' &&
+    typeof error === "object" &&
     error !== null &&
-    (('response' in error &&
+    (("response" in error &&
       (error as { response?: { statusCode?: number } }).response?.statusCode ===
         404) ||
-      ('statusCode' in error &&
+      ("statusCode" in error &&
         (error as { statusCode?: number }).statusCode === 404))
   );
 }

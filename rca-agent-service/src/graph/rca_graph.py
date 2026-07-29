@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from typing import Any, TypedDict
+from datetime import datetime, timedelta, timezone
+import jwt
 
 from langgraph.graph import END, StateGraph
 
@@ -49,8 +51,24 @@ class RCAGraphRunner:
         self.settings = settings
         self.events = events
 
-    async def run(self, run_id: str, incident_id: str) -> RCAReport:
-        mcp = MCPClient(self.settings.rca_mcp_server_url)
+    async def run(
+        self, workspace_id: str, run_id: str, incident_id: str
+    ) -> RCAReport:
+        now = datetime.now(timezone.utc)
+        token = jwt.encode(
+            {
+                "iss": "rca-agent",
+                "aud": "rca-mcp",
+                "iat": now,
+                "exp": now + timedelta(minutes=2),
+                "workspaceId": workspace_id,
+                "runId": run_id,
+                "incidentId": incident_id,
+            },
+            self.settings.internal_service_jwt_secret,
+            algorithm="HS256",
+        )
+        mcp = MCPClient(self.settings.rca_mcp_server_url, token)
         llm = LLMClient(self.settings)
         runtime = AgentRuntime(mcp=mcp, llm=llm)
         try:
