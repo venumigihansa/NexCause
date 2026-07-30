@@ -18,6 +18,10 @@ selected child organizations. Configure the API identifier as
 `ASGARDEO_API_AUDIENCE`; the backend rejects access tokens for any other
 audience.
 
+Configure `ASGARDEO_ISSUER` with the issuer shown in the application's Info
+tab. For Asgardeo cloud it has this form:
+`https://api.asgardeo.io/t/<root-organization-name>/oauth2/token`.
+
 Authorize application-audience roles with additive scopes:
 
 | Role | Scopes |
