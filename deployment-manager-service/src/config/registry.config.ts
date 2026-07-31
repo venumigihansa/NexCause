@@ -7,5 +7,5 @@ export default () => ({
     process.env.BUILDPACK_BUILDER_IMAGE ?? "gcr.io/buildpacks/builder",
   buildpackRunnerImage:
     process.env.BUILDPACK_RUNNER_IMAGE ??
-    "ghcr.io/venumigihansa/nexcause-buildpack-runner:0.1.0",
+    "ghcr.io/venumigihansa/nexcause-buildpack-runner:0.1.1",
 });

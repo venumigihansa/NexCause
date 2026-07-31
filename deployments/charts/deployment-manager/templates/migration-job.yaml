@@ -2,16 +2,21 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "deployment-manager.fullname" . }}-migration
+  name: {{ include "deployment-manager.fullname" . }}-migration{{- if and .Values.global.database.bundled .Release.IsInstall }}-install{{- end }}
   labels:
     {{- include "deployment-manager.labels" . | nindent 4 }}
   annotations:
-    helm.sh/hook: {{ ternary "post-install,pre-upgrade" "pre-install,pre-upgrade" .Values.global.database.bundled | quote }}
+    {{- if not (and .Values.global.database.bundled .Release.IsInstall) }}
+    helm.sh/hook: "pre-install,pre-upgrade"
     helm.sh/hook-weight: "-5"
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    {{- end }}
 spec:
   backoffLimit: {{ .Values.migration.backoffLimit }}
   activeDeadlineSeconds: {{ .Values.migration.activeDeadlineSeconds }}
+  {{- if and .Values.global.database.bundled .Release.IsInstall }}
+  ttlSecondsAfterFinished: 300
+  {{- end }}
   template:
     metadata:
       labels:

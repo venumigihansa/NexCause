@@ -63,7 +63,7 @@ export class BuildsService {
       "gcr.io/buildpacks/builder";
     const buildpackRunnerImage =
       this.configService.get<string>("buildpackRunnerImage") ??
-      "ghcr.io/venumigihansa/nexcause-buildpack-runner:0.1.0";
+      "ghcr.io/venumigihansa/nexcause-buildpack-runner:0.1.1";
     const hostImage = `${localRegistryHost}/${imageRepository}:${buildId}`;
     const clusterImage = `${localRegistryCluster}/${imageRepository}:${buildId}`;
 

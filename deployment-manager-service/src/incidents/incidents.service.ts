@@ -51,10 +51,16 @@ export class IncidentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.detectionTimer = setInterval(() => {
-      void this.detectIncidents();
+      this.startIncidentDetection();
     }, intervalSeconds * 1000);
 
-    void this.detectIncidents();
+    this.startIncidentDetection();
+  }
+
+  private startIncidentDetection() {
+    void this.detectIncidents().catch((error) => {
+      this.logger.warn(`Incident detection failed: ${getErrorMessage(error)}`);
+    });
   }
 
   onModuleDestroy() {

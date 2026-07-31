@@ -13,7 +13,7 @@ All RCA Platform services are configured at runtime through environment variable
 | `LOCAL_REGISTRY_HOST` | Deployment manager | No | `localhost:5001` | Configuration | Uses the default host-visible registry. |
 | `LOCAL_REGISTRY_CLUSTER` | Deployment manager | No | `kind-registry:5000` | Configuration | Uses the default cluster-visible registry. |
 | `BUILDPACK_BUILDER_IMAGE` | Deployment manager | No | `gcr.io/buildpacks/builder` | Configuration | Uses the default builder image. |
-| `BUILDPACK_RUNNER_IMAGE` | Deployment manager | No | `ghcr.io/venumigihansa/nexcause-buildpack-runner:0.1.0` | Configuration | Uses the released buildpack runner image. |
+| `BUILDPACK_RUNNER_IMAGE` | Deployment manager | No | `ghcr.io/venumigihansa/nexcause-buildpack-runner:0.1.1` | Configuration | Uses the released buildpack runner image. |
 | `OBSERVABILITY_ENABLED` | Deployment manager | No | `true` | Configuration | Observability polling remains enabled. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Deployment manager | No | in-cluster collector URL | Configuration | Exports to the default collector address. |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | Deployment manager | No | `http/protobuf` | Configuration | Uses OTLP over HTTP/protobuf. |

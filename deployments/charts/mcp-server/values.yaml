@@ -1,5 +1,5 @@
 replicaCount: 1
-image: { repository: ghcr.io/venumigihansa/nexcause-mcp-server, tag: "0.1.0", pullPolicy: IfNotPresent }
+image: { repository: ghcr.io/venumigihansa/nexcause-mcp-server, tag: "0.1.1", pullPolicy: IfNotPresent }
 service: { type: ClusterIP, port: 80 }
 config: {}
 resources:

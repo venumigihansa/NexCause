@@ -48,10 +48,18 @@ export class ObservabilityService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.healthSampleTimer = setInterval(() => {
-      void this.collectAllHealthSamples();
+      this.startHealthSampleCollection();
     }, intervalSeconds * 1000);
 
-    void this.collectAllHealthSamples();
+    this.startHealthSampleCollection();
+  }
+
+  private startHealthSampleCollection() {
+    void this.collectAllHealthSamples().catch((error) => {
+      this.logger.warn(
+        `Health sample collection failed: ${getErrorMessage(error)}`,
+      );
+    });
   }
 
   onModuleDestroy() {

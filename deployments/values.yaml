@@ -61,7 +61,7 @@ gateway:
 deployment-manager:
   image:
     repository: ghcr.io/venumigihansa/nexcause-deployment-manager
-    tag: "0.1.0"
+    tag: "0.1.1"
     pullPolicy: IfNotPresent
   migration:
     enabled: true
@@ -77,7 +77,7 @@ deployment-manager:
     AUTO_RCA_ENABLED: "false"
     RCA_AGENT_ENABLED: "true"
     RCA_AGENT_TRIGGER_MODE: async
-    BUILDPACK_RUNNER_IMAGE: ghcr.io/venumigihansa/nexcause-buildpack-runner:0.1.0
+    BUILDPACK_RUNNER_IMAGE: ghcr.io/venumigihansa/nexcause-buildpack-runner:0.1.1
     ASGARDEO_ISSUER: ""
     ASGARDEO_CLIENT_ID: ""
     ASGARDEO_API_AUDIENCE: ""
@@ -92,7 +92,7 @@ deployment-manager:
 rca-agent:
   image:
     repository: ghcr.io/venumigihansa/nexcause-rca-agent
-    tag: "0.1.0"
+    tag: "0.1.1"
     pullPolicy: IfNotPresent
   existingSecret:
     name: ""
@@ -107,7 +107,7 @@ rca-agent:
 mcp-server:
   image:
     repository: ghcr.io/venumigihansa/nexcause-mcp-server
-    tag: "0.1.0"
+    tag: "0.1.1"
     pullPolicy: IfNotPresent
   config:
     KUBERNETES_IN_CLUSTER: "true"

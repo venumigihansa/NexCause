@@ -63,5 +63,20 @@ for values_file in "$ROOT/deployments/values.yaml" "$ROOT/deployments/values-kin
   }
 done
 
-echo "Release metadata is consistently versioned at $VERSION."
+grep -Eq "^[[:space:]]*\"version\": \"${VERSION}\",?$" \
+  "$ROOT/deployment-manager-service/package.json" || {
+  echo "error: Deployment Manager package version does not match $VERSION" >&2
+  exit 1
+}
 
+grep -Eq "^version = \"${VERSION}\"$" "$ROOT/rca-agent-service/pyproject.toml" || {
+  echo "error: RCA Agent package version does not match $VERSION" >&2
+  exit 1
+}
+
+grep -Fq "\"version\": \"${VERSION}\"" "$ROOT/rca-mcp-server/internal/tools/mcp.go" || {
+  echo "error: MCP Server version does not match $VERSION" >&2
+  exit 1
+}
+
+echo "Release metadata is consistently versioned at $VERSION."
