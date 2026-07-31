@@ -150,6 +150,12 @@ jobs:
       - uses: azure/setup-helm@v4
         with:
           version: v3.18.6
+      - name: Add Helm dependency repositories
+        run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo add grafana https://grafana.github.io/helm-charts
+          helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
+          helm repo update
       - name: Build chart dependencies
         run: helm dependency build deployments
       - name: Package chart
@@ -172,4 +178,3 @@ jobs:
           echo "### oci://ghcr.io/venumigihansa/charts/rca-platform" >> "$GITHUB_STEP_SUMMARY"
           echo "Version: ${{ needs.metadata.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Package SHA-256: $digest" >> "$GITHUB_STEP_SUMMARY"
-

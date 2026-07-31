@@ -132,6 +132,12 @@ jobs:
       - uses: azure/setup-helm@v4
         with:
           version: v3.18.6
+      - name: Add Helm dependency repositories
+        run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo add grafana https://grafana.github.io/helm-charts
+          helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
+          helm repo update
       - run: helm dependency build deployments
       - run: helm lint deployments -f deployments/values-kind.yaml
       - name: Render Kind manifests
@@ -183,4 +189,3 @@ jobs:
             SOURCE_URL=https://github.com/venumigihansa/NexCause
           cache-from: type=gha,scope=ci-${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=ci-${{ matrix.name }}
-
