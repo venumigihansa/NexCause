@@ -1,0 +1,8 @@
+.DS_Store
+dist/
+*.tsbuildinfo
+__pycache__/
+*.py[cod]
+*.egg-info/
+rca-mcp-server/rca-mcp-server
+*.tgz

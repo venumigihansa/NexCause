@@ -14,9 +14,13 @@ FROM gcr.io/distroless/static-debian12:nonroot
 
 ARG VERSION=dev
 ARG VCS_REF=unknown
+ARG SOURCE_URL=https://github.com/venumigihansa/NexCause
+ARG CREATED=unknown
 LABEL org.opencontainers.image.title="RCA Platform MCP Server" \
       org.opencontainers.image.version="${VERSION}" \
-      org.opencontainers.image.revision="${VCS_REF}"
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.source="${SOURCE_URL}" \
+      org.opencontainers.image.created="${CREATED}"
 
 COPY --from=build /out/rca-mcp-server /rca-mcp-server
 EXPOSE 8080

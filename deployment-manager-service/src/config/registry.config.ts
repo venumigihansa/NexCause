@@ -7,5 +7,5 @@ export default () => ({
     process.env.BUILDPACK_BUILDER_IMAGE ?? "gcr.io/buildpacks/builder",
   buildpackRunnerImage:
     process.env.BUILDPACK_RUNNER_IMAGE ??
-    "localhost:5001/deployment-manager-buildpack-runner:latest",
+    "ghcr.io/venumigihansa/nexcause-buildpack-runner:0.1.0",
 });

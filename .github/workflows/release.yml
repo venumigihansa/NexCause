@@ -1,0 +1,175 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify release
+    uses: ./.github/workflows/ci.yml
+
+  metadata:
+    name: Release metadata
+    needs: verify
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+      created: ${{ steps.release.outputs.created }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate tag and source branch
+        id: release
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid semantic release tag: $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Release tag must reference a commit on main." >&2
+            exit 1
+          fi
+
+          ./scripts/verify-release-version.sh "$version"
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  images:
+    name: Publish ${{ matrix.name }}
+    needs: metadata
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: deployment-manager
+            image: nexcause-deployment-manager
+            context: deployment-manager-service
+            file: deployment-manager-service/Dockerfile
+          - name: rca-agent
+            image: nexcause-rca-agent
+            context: rca-agent-service
+            file: rca-agent-service/Dockerfile
+          - name: mcp-server
+            image: nexcause-mcp-server
+            context: rca-mcp-server
+            file: rca-mcp-server/Dockerfile
+          - name: buildpack-runner
+            image: nexcause-buildpack-runner
+            context: deployment-manager-service/buildpack-runner
+            file: deployment-manager-service/buildpack-runner/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/venumigihansa/${{ matrix.image }}
+          tags: |
+            type=raw,value=${{ needs.metadata.outputs.version }}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable=${{ needs.metadata.outputs.prerelease == 'false' }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/venumigihansa/NexCause
+            org.opencontainers.image.version=${{ needs.metadata.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ needs.metadata.outputs.created }}
+      - name: Build and publish image
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ needs.metadata.outputs.version }}
+            VCS_REF=${{ github.sha }}
+            SOURCE_URL=https://github.com/venumigihansa/NexCause
+            CREATED=${{ needs.metadata.outputs.created }}
+          cache-from: type=gha,scope=release-${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=release-${{ matrix.name }}
+          provenance: mode=max
+          sbom: true
+      - name: Attest image provenance
+        uses: actions/attest@v4
+        with:
+          subject-name: ghcr.io/venumigihansa/${{ matrix.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+      - name: Summarize image
+        run: |
+          echo "### ghcr.io/venumigihansa/${{ matrix.image }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.push.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  chart:
+    name: Publish Helm chart
+    needs: [metadata, images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.18.6
+      - name: Build chart dependencies
+        run: helm dependency build deployments
+      - name: Package chart
+        run: >-
+          helm package deployments
+          --destination dist
+          --version "${{ needs.metadata.outputs.version }}"
+          --app-version "${{ needs.metadata.outputs.version }}"
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
+      - name: Publish chart
+        run: helm push "dist/rca-platform-${{ needs.metadata.outputs.version }}.tgz" oci://ghcr.io/venumigihansa/charts
+      - name: Attest chart
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/rca-platform-${{ needs.metadata.outputs.version }}.tgz
+      - name: Summarize chart
+        run: |
+          digest="$(sha256sum "dist/rca-platform-${{ needs.metadata.outputs.version }}.tgz" | awk '{print $1}')"
+          echo "### oci://ghcr.io/venumigihansa/charts/rca-platform" >> "$GITHUB_STEP_SUMMARY"
+          echo "Version: ${{ needs.metadata.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Package SHA-256: $digest" >> "$GITHUB_STEP_SUMMARY"
+

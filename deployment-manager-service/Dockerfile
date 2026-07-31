@@ -29,9 +29,13 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 ARG VERSION=dev
 ARG VCS_REF=unknown
+ARG SOURCE_URL=https://github.com/venumigihansa/NexCause
+ARG CREATED=unknown
 LABEL org.opencontainers.image.title="RCA Platform Deployment Manager" \
       org.opencontainers.image.version="${VERSION}" \
-      org.opencontainers.image.revision="${VCS_REF}"
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.source="${SOURCE_URL}" \
+      org.opencontainers.image.created="${CREATED}"
 
 ENV NODE_ENV=production
 WORKDIR /app

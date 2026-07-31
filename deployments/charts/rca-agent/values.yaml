@@ -1,5 +1,5 @@
 replicaCount: 1
-image: { repository: rca-platform/rca-agent, tag: dev, pullPolicy: IfNotPresent }
+image: { repository: ghcr.io/venumigihansa/nexcause-rca-agent, tag: "0.1.0", pullPolicy: IfNotPresent }
 service: { type: ClusterIP, port: 80 }
 existingSecret: { name: "", llmApiKeyKey: RCA_LLM_API_KEY }
 config: {}

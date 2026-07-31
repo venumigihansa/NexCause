@@ -13,7 +13,7 @@ All RCA Platform services are configured at runtime through environment variable
 | `LOCAL_REGISTRY_HOST` | Deployment manager | No | `localhost:5001` | Configuration | Uses the default host-visible registry. |
 | `LOCAL_REGISTRY_CLUSTER` | Deployment manager | No | `kind-registry:5000` | Configuration | Uses the default cluster-visible registry. |
 | `BUILDPACK_BUILDER_IMAGE` | Deployment manager | No | `gcr.io/buildpacks/builder` | Configuration | Uses the default builder image. |
-| `BUILDPACK_RUNNER_IMAGE` | Deployment manager | No | local runner image | Configuration | Uses the default local runner image. |
+| `BUILDPACK_RUNNER_IMAGE` | Deployment manager | No | `ghcr.io/venumigihansa/nexcause-buildpack-runner:0.1.0` | Configuration | Uses the released buildpack runner image. |
 | `OBSERVABILITY_ENABLED` | Deployment manager | No | `true` | Configuration | Observability polling remains enabled. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Deployment manager | No | in-cluster collector URL | Configuration | Exports to the default collector address. |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | Deployment manager | No | `http/protobuf` | Configuration | Uses OTLP over HTTP/protobuf. |
@@ -67,4 +67,4 @@ All RCA Platform services are configured at runtime through environment variable
 
 ## Image naming
 
-Local images use `rca-platform/deployment-manager:dev`, `rca-platform/rca-agent:dev`, and `rca-platform/mcp-server:dev`. Releases use semantic-version tags and CI additionally publishes immutable `git-<short-sha>` tags. Production deployments must not use `latest`.
+Released images use the public `ghcr.io/venumigihansa/nexcause-*` repositories. CI publishes semantic-version tags and immutable `sha-<short-sha>` tags. Production deployments must not use `latest`.

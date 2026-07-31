@@ -24,6 +24,10 @@ spec:
           restartPolicy: Never
           securityContext:
             {{- toYaml .Values.global.podSecurityContext | nindent 12 }}
+          {{- with .Values.global.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           containers:
             - name: cleanup
               image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"

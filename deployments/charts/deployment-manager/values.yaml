@@ -1,7 +1,7 @@
 replicaCount: 1
 image:
-  repository: rca-platform/deployment-manager
-  tag: dev
+  repository: ghcr.io/venumigihansa/nexcause-deployment-manager
+  tag: "0.1.0"
   pullPolicy: IfNotPresent
 service:
   type: ClusterIP

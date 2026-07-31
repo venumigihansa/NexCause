@@ -18,30 +18,46 @@ The script installs pinned standard-channel Gateway API CRDs, kgateway and cert-
 
 Kind does not implement `LoadBalancer` Services by itself. Install and run [cloud-provider-kind](https://kubernetes-sigs.github.io/cloud-provider-kind/) before testing the external Gateway address. A port-forward fallback is documented below.
 
-## Local Kind installation
+## Published artifacts
 
-Build the application images from the repository root:
+Stable releases publish multi-platform images and the umbrella chart to the
+public GitHub Container Registry namespace:
 
-```bash
-docker build -t rca-platform/deployment-manager:dev deployment-manager-service
-docker build -t rca-platform/rca-agent:dev rca-agent-service
-docker build -t rca-platform/mcp-server:dev rca-mcp-server
+```text
+ghcr.io/venumigihansa/nexcause-deployment-manager
+ghcr.io/venumigihansa/nexcause-rca-agent
+ghcr.io/venumigihansa/nexcause-mcp-server
+ghcr.io/venumigihansa/nexcause-buildpack-runner
+oci://ghcr.io/venumigihansa/charts/rca-platform
 ```
 
-Load them into the Kind cluster and install the release:
+Releases are created from semantic-version tags such as `v0.1.0`. CI also
+publishes an immutable `sha-<short-sha>` image tag. `latest` is updated only for
+stable versions, and deployment values should use a semantic version or digest.
+
+Verify a public release without registry credentials:
 
 ```bash
-kind load docker-image --name rca-lab \
-  rca-platform/deployment-manager:dev \
-  rca-platform/rca-agent:dev \
-  rca-platform/mcp-server:dev
+docker pull ghcr.io/venumigihansa/nexcause-deployment-manager:0.1.0
+helm pull oci://ghcr.io/venumigihansa/charts/rca-platform --version 0.1.0
+```
 
-helm upgrade --install rca-platform ./deployments \
+## Local Kind installation
+
+After the release is public, install the published chart with the Kind profile
+from this repository:
+
+```bash
+helm upgrade --install rca-platform \
+  oci://ghcr.io/venumigihansa/charts/rca-platform \
+  --version 0.1.0 \
   --namespace rca-platform \
   --create-namespace \
   -f ./deployments/values-kind.yaml \
   --wait --timeout 5m
 ```
+
+A later installer will supply the same local profile automatically.
 
 `values-kind.yaml` uses development-only Postgres credentials. Do not reuse them outside a local cluster. Supply an LLM key without committing it by creating a Secret and setting the agent Secret reference:
 

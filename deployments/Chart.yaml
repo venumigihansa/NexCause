@@ -4,6 +4,11 @@ description: RCA Platform application and local infrastructure
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
+home: https://github.com/venumigihansa/NexCause
+sources:
+  - https://github.com/venumigihansa/NexCause
+annotations:
+  org.opencontainers.image.source: https://github.com/venumigihansa/NexCause
 dependencies:
   - name: deployment-manager
     version: 0.1.0

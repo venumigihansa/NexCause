@@ -2,9 +2,13 @@ FROM python:3.11-slim
 
 ARG VERSION=dev
 ARG VCS_REF=unknown
+ARG SOURCE_URL=https://github.com/venumigihansa/NexCause
+ARG CREATED=unknown
 LABEL org.opencontainers.image.title="RCA Platform Agent" \
       org.opencontainers.image.version="${VERSION}" \
-      org.opencontainers.image.revision="${VCS_REF}"
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.source="${SOURCE_URL}" \
+      org.opencontainers.image.created="${CREATED}"
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
