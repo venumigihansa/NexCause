@@ -61,7 +61,7 @@ gateway:
 deployment-manager:
   image:
     repository: ghcr.io/venumigihansa/nexcause-deployment-manager
-    tag: "0.1.1"
+    tag: "0.1.2"
     pullPolicy: IfNotPresent
   migration:
     enabled: true
@@ -77,7 +77,7 @@ deployment-manager:
     AUTO_RCA_ENABLED: "false"
     RCA_AGENT_ENABLED: "true"
     RCA_AGENT_TRIGGER_MODE: async
-    BUILDPACK_RUNNER_IMAGE: ghcr.io/venumigihansa/nexcause-buildpack-runner:0.1.1
+    BUILDPACK_RUNNER_IMAGE: ghcr.io/venumigihansa/nexcause-buildpack-runner:0.1.2
     ASGARDEO_ISSUER: ""
     ASGARDEO_CLIENT_ID: ""
     ASGARDEO_API_AUDIENCE: ""
@@ -92,7 +92,7 @@ deployment-manager:
 rca-agent:
   image:
     repository: ghcr.io/venumigihansa/nexcause-rca-agent
-    tag: "0.1.1"
+    tag: "0.1.2"
     pullPolicy: IfNotPresent
   existingSecret:
     name: ""
@@ -107,7 +107,7 @@ rca-agent:
 mcp-server:
   image:
     repository: ghcr.io/venumigihansa/nexcause-mcp-server
-    tag: "0.1.1"
+    tag: "0.1.2"
     pullPolicy: IfNotPresent
   config:
     KUBERNETES_IN_CLUSTER: "true"
@@ -213,55 +213,6 @@ opentelemetry-collector:
         traces: { receivers: [otlp], processors: [memory_limiter, k8sattributes, batch], exporters: [otlp/tempo] }
         metrics: { receivers: [otlp], processors: [memory_limiter, k8sattributes, batch], exporters: [prometheus] }
         logs: { receivers: [otlp], processors: [memory_limiter, k8sattributes, batch], exporters: [otlphttp/loki] }
-
-grafana:
-  fullnameOverride: rca-observability-grafana
-  deploymentStrategy:
-    type: Recreate
-  adminUser: admin
-  adminPassword: ""
-  persistence: { enabled: true, size: 5Gi }
-  resources:
-    requests: { cpu: 100m, memory: 128Mi }
-    limits: { cpu: 500m, memory: 512Mi }
-  datasources:
-    datasources.yaml:
-      apiVersion: 1
-      datasources:
-        - { name: Prometheus, uid: prometheus, type: prometheus, url: http://rca-observability-prometheus, access: proxy, isDefault: true, editable: false }
-        - { name: Loki, uid: loki, type: loki, url: http://rca-observability-loki:3100, access: proxy, editable: false }
-        - { name: Tempo, uid: tempo, type: tempo, url: http://rca-observability-tempo:3200, access: proxy, editable: false }
-  dashboardProviders:
-    dashboardproviders.yaml:
-      apiVersion: 1
-      providers:
-        - name: rca-platform
-          orgId: 1
-          folder: RCA Platform
-          type: file
-          disableDeletion: true
-          editable: false
-          options: { path: /var/lib/grafana/dashboards/rca-platform }
-  dashboards:
-    rca-platform:
-      overview:
-        json: |
-          {
-            "annotations":{"list":[]},
-            "editable":false,
-            "panels":[
-              {"type":"timeseries","title":"Container CPU","datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(rate(container_cpu_usage_seconds_total{namespace=~\"apps|rca-platform\"}[5m])) by (namespace)","legendFormat":"{{namespace}}"}],"gridPos":{"h":8,"w":12,"x":0,"y":0}},
-              {"type":"timeseries","title":"Pod Restarts","datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(kube_pod_container_status_restarts_total) by (namespace)","legendFormat":"{{namespace}}"}],"gridPos":{"h":8,"w":12,"x":12,"y":0}},
-              {"type":"logs","title":"Managed Application Logs","datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{service_namespace=~\"apps|rca-platform\"}"}],"gridPos":{"h":10,"w":24,"x":0,"y":8}}
-            ],
-            "schemaVersion":41,
-            "tags":["rca-platform"],
-            "templating":{"list":[]},
-            "time":{"from":"now-1h","to":"now"},
-            "title":"RCA Platform Overview",
-            "uid":"rca-platform-overview",
-            "version":1
-          }
 
 postgres:
   enabled: false

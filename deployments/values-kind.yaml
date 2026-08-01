@@ -63,7 +63,7 @@ deployment-manager:
     DEFAULT_KUBERNETES_NAMESPACE: apps
     LOCAL_REGISTRY_HOST: localhost:30500
     BUILDPACK_BUILDER_IMAGE: gcr.io/buildpacks/builder
-    BUILDPACK_RUNNER_IMAGE: ghcr.io/venumigihansa/nexcause-buildpack-runner:0.1.1
+    BUILDPACK_RUNNER_IMAGE: ghcr.io/venumigihansa/nexcause-buildpack-runner:0.1.2
     OBSERVABILITY_ENABLED: "false"
     INCIDENT_DETECTION_ENABLED: "false"
     AUTO_RCA_ENABLED: "false"
@@ -86,6 +86,3 @@ loki:
 tempo:
   tempo: { retention: 1h }
   persistence: { enabled: true, size: 2Gi, storageClassName: standard }
-
-grafana:
-  persistence: { enabled: true, size: 1Gi, storageClassName: standard }

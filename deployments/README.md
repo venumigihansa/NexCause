@@ -31,15 +31,15 @@ ghcr.io/venumigihansa/nexcause-buildpack-runner
 oci://ghcr.io/venumigihansa/charts/rca-platform
 ```
 
-Releases are created from semantic-version tags such as `v0.1.1`. CI also
+Releases are created from semantic-version tags such as `v0.1.2`. CI also
 publishes an immutable `sha-<short-sha>` image tag. `latest` is updated only for
 stable versions, and deployment values should use a semantic version or digest.
 
 Verify a public release without registry credentials:
 
 ```bash
-docker pull ghcr.io/venumigihansa/nexcause-deployment-manager:0.1.1
-helm pull oci://ghcr.io/venumigihansa/charts/rca-platform --version 0.1.1
+docker pull ghcr.io/venumigihansa/nexcause-deployment-manager:0.1.2
+helm pull oci://ghcr.io/venumigihansa/charts/rca-platform --version 0.1.2
 ```
 
 ## Local Kind installation
@@ -50,7 +50,7 @@ from this repository:
 ```bash
 helm upgrade --install rca-platform \
   oci://ghcr.io/venumigihansa/charts/rca-platform \
-  --version 0.1.1 \
+  --version 0.1.2 \
   --namespace rca-platform \
   --create-namespace \
   -f ./deployments/values-kind.yaml \
@@ -107,15 +107,9 @@ kubectl delete pvc --namespace rca-platform \
 Reinstalling the chart initializes the fixed PostgreSQL version and creates the
 dedicated development-only database roles.
 
-The Kind profile also installs the shared OpenTelemetry Collector, Prometheus, Loki, Tempo, and Grafana. Access Grafana with:
-
-```bash
-kubectl port-forward -n rca-platform svc/rca-observability-grafana 3001:80
-kubectl get secret -n rca-platform rca-observability-grafana \
-  -o jsonpath='{.data.admin-password}' | base64 --decode
-```
-
-Sign in as `admin`. Prometheus, Loki, and Tempo are provisioned as data sources and the `RCA Platform Overview` dashboard is installed automatically.
+The Kind profile also installs the shared OpenTelemetry Collector, Prometheus,
+Loki, and Tempo. NexCause services use these backends directly for telemetry
+collection and RCA evidence.
 
 ## Database migrations
 

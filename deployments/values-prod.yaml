@@ -91,6 +91,3 @@ loki:
 tempo:
   tempo: { retention: 168h }
   persistence: { enabled: true, size: 50Gi, storageClassName: gp3 }
-
-grafana:
-  persistence: { enabled: true, size: 10Gi, storageClassName: gp3 }

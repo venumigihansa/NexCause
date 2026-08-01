@@ -59,7 +59,7 @@ func (h *MCPHandler) dispatch(r *http.Request, req jsonRPCRequest) (any, *jsonRP
 			"protocolVersion": "2024-11-05",
 			"serverInfo": map[string]any{
 				"name":    "rca-mcp-server",
-				"version": "0.1.1",
+				"version": "0.1.2",
 			},
 			"capabilities": map[string]any{
 				"tools": map[string]any{},

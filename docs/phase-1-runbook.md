@@ -26,7 +26,7 @@ CI and release builds should pass immutable metadata:
 
 ```bash
 IMAGE_TAG=git-$(git rev-parse --short HEAD) \
-IMAGE_VERSION=0.1.1 \
+IMAGE_VERSION=0.1.2 \
 VCS_REF=$(git rev-parse --short HEAD) \
 docker compose build
 ```
