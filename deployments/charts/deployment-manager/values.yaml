@@ -29,6 +29,8 @@ applicationRouting:
   namespaceLabel:
     key: rca-platform.io/gateway-access
     value: "true"
+tenantNetworkPolicy:
+  enabled: false
 config: {}
 resources:
   requests: { cpu: 100m, memory: 256Mi }

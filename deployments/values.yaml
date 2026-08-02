@@ -65,6 +65,8 @@ deployment-manager:
     pullPolicy: IfNotPresent
   migration:
     enabled: true
+  tenantNetworkPolicy:
+    enabled: false
   auth:
     existingSecret:
       name: rca-asgardeo

@@ -54,6 +54,8 @@ gateway:
     enabled: true
 
 deployment-manager:
+  tenantNetworkPolicy:
+    enabled: true
   applicationRouting:
     enabled: true
     gatewayName: rca-gateway

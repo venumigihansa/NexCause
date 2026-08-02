@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import * as k8s from "@kubernetes/client-node";
 import { buildBuildJobManifest } from "./builders/build-job-manifest.builder";
 import { buildBuildpackJobManifest } from "./builders/buildpack-job-manifest.builder";
@@ -11,6 +12,10 @@ import { buildDeploymentManifest } from "./builders/deployment-manifest.builder"
 import { buildNamespaceManifest } from "./builders/namespace-manifest.builder";
 import { buildSecretManifest } from "./builders/secret-manifest.builder";
 import { buildServiceManifest } from "./builders/service-manifest.builder";
+import {
+  buildApplicationPodLabels,
+  buildTenantNetworkPolicyManifests,
+} from "./builders/tenant-network-policy-manifest.builder";
 import { KubernetesResourceNames } from "./types/kubernetes-resource-names";
 
 // Shape of the normalized data KubernetesService needs to create resources.
@@ -74,8 +79,9 @@ export class KubernetesService {
   private readonly appsApi: k8s.AppsV1Api;
   private readonly batchApi: k8s.BatchV1Api;
   private readonly customObjectsApi: k8s.CustomObjectsApi;
+  private readonly networkingApi: k8s.NetworkingV1Api;
 
-  constructor() {
+  constructor(private readonly configService: ConfigService) {
     const kubeConfig = new k8s.KubeConfig();
     kubeConfig.loadFromDefault();
 
@@ -83,6 +89,7 @@ export class KubernetesService {
     this.appsApi = kubeConfig.makeApiClient(k8s.AppsV1Api);
     this.batchApi = kubeConfig.makeApiClient(k8s.BatchV1Api);
     this.customObjectsApi = kubeConfig.makeApiClient(k8s.CustomObjectsApi);
+    this.networkingApi = kubeConfig.makeApiClient(k8s.NetworkingV1Api);
   }
 
   // Creates deterministic Kubernetes resource names for one app deployment.
@@ -407,6 +414,73 @@ export class KubernetesService {
         }),
       );
     }
+
+    if (this.configService.get<boolean>("tenantNetworkPolicyEnabled")) {
+      await this.reconcileTenantNetworkPolicies(namespace);
+    }
+  }
+
+  private async reconcileTenantNetworkPolicies(
+    namespace: string,
+  ): Promise<void> {
+    const gatewayName =
+      this.configService.get<string>("applicationGatewayName") ?? "";
+    const gatewayNamespace =
+      this.configService.get<string>("applicationGatewayNamespace") ?? "";
+
+    if (!gatewayName || !gatewayNamespace) {
+      throw new Error(
+        "Tenant NetworkPolicy requires an application Gateway name and namespace",
+      );
+    }
+
+    const policies = buildTenantNetworkPolicyManifests({
+      namespace,
+      gatewayName,
+      gatewayNamespace,
+    });
+
+    try {
+      for (const policy of policies) {
+        await this.upsertNetworkPolicy(namespace, policy);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Failed to reconcile tenant NetworkPolicies in namespace ${namespace}: ${message}`,
+      );
+    }
+  }
+
+  private async upsertNetworkPolicy(
+    namespace: string,
+    policy: k8s.V1NetworkPolicy,
+  ): Promise<void> {
+    const name = policy.metadata?.name;
+    if (!name) {
+      throw new Error("Tenant NetworkPolicy is missing metadata.name");
+    }
+
+    try {
+      const existing = await this.networkingApi.readNamespacedNetworkPolicy(
+        name,
+        namespace,
+      );
+      policy.metadata = {
+        ...policy.metadata,
+        resourceVersion: existing.body.metadata?.resourceVersion,
+      };
+      await this.networkingApi.replaceNamespacedNetworkPolicy(
+        name,
+        namespace,
+        policy,
+      );
+    } catch (error) {
+      if (!isKubernetesNotFound(error)) {
+        throw error;
+      }
+      await this.networkingApi.createNamespacedNetworkPolicy(namespace, policy);
+    }
   }
 
   private async enableApplicationRouting(
@@ -687,12 +761,16 @@ export class KubernetesService {
 
   // Creates or replaces the Kubernetes Deployment that runs the container image.
   private async upsertDeployment(input: DeployImageInput): Promise<void> {
+    const workloadLabels = buildApplicationPodLabels(
+      input.labels,
+      Boolean(input.routing),
+    );
     const deployment = buildDeploymentManifest({
       name: input.names.deploymentName,
       image: input.image,
       port: input.port,
       replicas: input.replicas,
-      labels: input.labels,
+      labels: workloadLabels,
       configMapName: input.names.configMapName,
       secretName:
         Object.keys(input.secrets).length > 0

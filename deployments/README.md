@@ -176,6 +176,25 @@ wildcard DNS is not created automatically. Deleting the deployment removes
 both HTTPRoutes. The Deployment Manager wildcard hostname must match
 `gateway.applicationWildcardHostname`.
 
+## Tenant ingress isolation
+
+The Kind and production profiles enable simple ingress-only NetworkPolicies in
+Deployment Manager-created workspace namespaces. Incoming traffic is denied by
+default, Pods in the same workspace may communicate, and the shared Gateway may
+reach only application Pods created with `expose: true`. Egress remains
+unrestricted so builds, DNS, external APIs, and telemetry continue to work.
+
+Kind v0.24 and later enforce NetworkPolicy with the built-in Kind network
+implementation. For standard EKS clusters, enable NetworkPolicy support on a
+supported Amazon VPC CNI add-on before relying on these policies:
+
+```json
+{ "enableNetworkPolicy": "true" }
+```
+
+Set `deployment-manager.tenantNetworkPolicy.enabled=false` only for clusters
+whose CNI cannot enforce Kubernetes NetworkPolicy.
+
 ## Validation
 
 ```bash

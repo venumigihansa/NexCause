@@ -9,4 +9,6 @@ export default () => ({
     "rca-platform.io/gateway-access",
   gatewayAccessNamespaceLabelValue:
     process.env.GATEWAY_ACCESS_NAMESPACE_LABEL_VALUE ?? "true",
+  tenantNetworkPolicyEnabled:
+    process.env.TENANT_NETWORK_POLICY_ENABLED === "true",
 });
