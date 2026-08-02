@@ -11,7 +11,14 @@ data:
   {{- if .Values.global.observability.enabled }}
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://rca-observability-otel:4318"
   OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+  PROMETHEUS_URL: "http://rca-observability-prometheus"
+  LOKI_URL: "http://rca-observability-loki:3100"
+  TEMPO_URL: "http://rca-observability-tempo:3200"
   {{- end }}
+  TELEMETRY_QUERY_TIMEOUT_SECONDS: {{ .Values.telemetry.queryTimeoutSeconds | quote }}
+  TELEMETRY_MAX_LOOKBACK_MINUTES: {{ .Values.telemetry.maxLookbackMinutes | quote }}
+  TELEMETRY_MAX_LOG_LINES: {{ .Values.telemetry.maxLogLines | quote }}
+  TELEMETRY_MAX_TRACES: {{ .Values.telemetry.maxTraces | quote }}
   {{- if .Values.localRegistry.enabled }}
   LOCAL_REGISTRY_CLUSTER: {{ printf "%s-registry:%v" .Release.Name .Values.localRegistry.port | quote }}
   {{- end }}

@@ -20,6 +20,7 @@ import { RcaModule } from "./rca/rca.module";
 import { RegistryModule } from "./registry/registry.module";
 import { RuntimeModule } from "./runtime/runtime.module";
 import { SourceControlModule } from "./source-control/source-control.module";
+import { TelemetryModule } from "./telemetry/telemetry.module";
 import { AuthModule } from "./auth/auth.module";
 import authConfig from "./auth/auth.config";
 
@@ -52,6 +53,7 @@ import authConfig from "./auth/auth.config";
     SourceControlModule,
     RuntimeModule,
     ObservabilityModule,
+    TelemetryModule,
   ],
 })
 export class AppModule {}
