@@ -129,7 +129,8 @@ Bundled Postgres and the local registry are disabled in `values-prod.yaml`. Befo
    ```
 
 3. Provision a `letsencrypt-production` ClusterIssuer using Route 53 DNS-01 and IAM scoped to the hosted zone.
-4. Create Route 53 records for the manager hostname and application wildcard that point to the generated NLB.
+4. Create Route 53 records for the console hostname, manager hostname, and
+   application wildcard that point to the generated NLB.
 5. Install External Secrets Operator and create the
    `aws-secrets-manager` `ClusterSecretStore` using EKS Pod Identity or IRSA.
 6. Populate the AWS secret paths and JSON properties documented in
@@ -137,19 +138,26 @@ Bundled Postgres and the local registry are disabled in `values-prod.yaml`. Befo
    internal JWT, and four restricted database Secrets.
 7. Configure immutable ECR image references and provide the agent LLM Secret.
 
-The production values intentionally contain invalid hostname placeholders. Helm schema validation prevents installation until both are replaced:
+The production values intentionally contain invalid hostname placeholders. Helm
+schema validation prevents installation until the console, manager, and
+application wildcard hostnames are replaced:
 
 ```bash
 helm upgrade --install rca-platform ./deployments \
   --namespace rca-platform \
   -f ./deployments/values-prod.yaml \
+  --set-string gateway.consoleHostname=console.rca.example.com \
   --set-string gateway.deploymentManagerHostname=manager.rca.example.com \
   --set-string 'gateway.applicationWildcardHostname=*.apps.rca.example.com' \
   --set-string 'deployment-manager.applicationRouting.applicationWildcardHostname=*.apps.rca.example.com' \
   --wait --timeout 10m
 ```
 
-The EKS-only `GatewayParameters` configures kgateway's generated `LoadBalancer` Service for an internet-facing AWS NLB. TLS is passed through the NLB and terminated by Envoy with the Secret maintained by cert-manager.
+The frontend console is exposed at `gateway.consoleHostname`; it proxies
+`/api/*` and `/auth/*` to Deployment Manager so browser cookies and CSRF stay
+on one origin. The EKS-only `GatewayParameters` configures kgateway's generated
+`LoadBalancer` Service for an internet-facing AWS NLB. TLS is passed through the
+NLB and terminated by Envoy with the Secret maintained by cert-manager.
 
 See [Gateway operations](../docs/gateway.md) for ownership, troubleshooting, and readiness checks.
 See [Authentication and tenancy operations](../docs/authentication-and-tenancy.md)

@@ -68,6 +68,10 @@ jobs:
             image: nexcause-deployment-manager
             context: deployment-manager-service
             file: deployment-manager-service/Dockerfile
+          - name: frontend
+            image: nexcause-frontend
+            context: frontend
+            file: frontend/Dockerfile
           - name: rca-agent
             image: nexcause-rca-agent
             context: rca-agent-service

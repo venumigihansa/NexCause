@@ -8,6 +8,7 @@ global:
 
 gateway:
   enabled: true
+  consoleHostname: console.rca.local
   deploymentManagerHostname: manager.rca.local
   applicationWildcardHostname: "*.apps.rca.local"
   tls:
@@ -64,15 +65,23 @@ deployment-manager:
     type: ClusterIP
     nodePort: null
   config:
-    AUTH_CALLBACK_URL: https://manager.rca.local:8443/auth/callback
-    APP_UI_URL: https://manager.rca.local:8443/auth/me
-    AUTH_POST_LOGOUT_URL: https://manager.rca.local:8443/auth/me
+    ASGARDEO_ISSUER: https://api.eu.asgardeo.io/t/causiumdev2026/oauth2/token
+    ASGARDEO_CLIENT_ID: MUgzzhvC63u7kcgrElZZTwrmRPca
+    ASGARDEO_API_AUDIENCE: https://manager.rca.local
+    ASGARDEO_ROOT_ORGANIZATION_ID: 29e0781f-ecb1-4d62-b5f6-4c60170ae7e0
+    AUTH_CALLBACK_URL: https://console.rca.local/auth/callback
+    APP_UI_URL: https://console.rca.local
+    AUTH_POST_LOGOUT_URL: https://console.rca.local
     AUTH_COOKIE_SECURE: "true"
-    APP_UI_ORIGINS: https://manager.rca.local:8443
+    APP_UI_ORIGINS: https://console.rca.local
     DEFAULT_KUBERNETES_NAMESPACE: apps
     LOCAL_REGISTRY_HOST: localhost:30500
     BUILDPACK_BUILDER_IMAGE: gcr.io/buildpacks/builder
     BUILDPACK_RUNNER_IMAGE: ghcr.io/venumigihansa/nexcause-buildpack-runner:0.1.3
+
+frontend:
+  config:
+    environment: kind
     OBSERVABILITY_ENABLED: "false"
     INCIDENT_DETECTION_ENABLED: "false"
     AUTO_RCA_ENABLED: "false"

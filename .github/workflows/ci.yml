@@ -108,6 +108,24 @@ jobs:
             echo "No Python tests are checked in yet; compile and import checks passed."
           fi
 
+  frontend:
+    name: Frontend Console
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
   mcp-server:
     name: MCP Server
     runs-on: ubuntu-latest
@@ -151,6 +169,7 @@ jobs:
           helm template rca-platform deployments
           --namespace rca-platform
           -f deployments/values-prod.yaml
+          --set-string gateway.consoleHostname=console.rca.example.com
           --set-string gateway.deploymentManagerHostname=manager.rca.example.com
           --set-string 'gateway.applicationWildcardHostname=*.apps.rca.example.com'
           --set-string 'deployment-manager.applicationRouting.applicationWildcardHostname=*.apps.rca.example.com'
@@ -166,6 +185,9 @@ jobs:
           - name: deployment-manager
             context: deployment-manager-service
             file: deployment-manager-service/Dockerfile
+          - name: frontend
+            context: frontend
+            file: frontend/Dockerfile
           - name: rca-agent
             context: rca-agent-service
             file: rca-agent-service/Dockerfile

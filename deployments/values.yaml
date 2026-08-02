@@ -34,6 +34,7 @@ gateway:
   enabled: false
   name: rca-gateway
   className: kgateway
+  consoleHostname: ""
   deploymentManagerHostname: ""
   applicationWildcardHostname: ""
   allowedRoutes:
@@ -90,6 +91,14 @@ deployment-manager:
     AUTH_POST_LOGOUT_URL: http://localhost:3000/auth/me
     AUTH_COOKIE_SECURE: "false"
     APP_UI_ORIGINS: http://localhost:3000
+
+frontend:
+  image:
+    repository: ghcr.io/venumigihansa/nexcause-frontend
+    tag: "0.1.3"
+    pullPolicy: IfNotPresent
+  config:
+    environment: local
 
 rca-agent:
   image:

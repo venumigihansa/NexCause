@@ -2,7 +2,7 @@
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: deployment-manager-https-redirect
+  name: frontend
   namespace: {{ .Release.Namespace }}
   labels:
     app.kubernetes.io/name: {{ .Chart.Name }}
@@ -10,14 +10,17 @@ metadata:
 spec:
   parentRefs:
     - name: {{ include "rca-platform.gatewayName" . }}
-      sectionName: http
+      sectionName: https
   hostnames:
     - {{ .Values.gateway.consoleHostname | quote }}
-    - {{ .Values.gateway.deploymentManagerHostname | quote }}
   rules:
-    - filters:
-        - type: RequestRedirect
-          requestRedirect:
-            scheme: https
-            statusCode: 308
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: {{ include "rca-platform.frontendServiceName" . }}
+          port: {{ .Values.frontend.service.port }}
 {{- end }}

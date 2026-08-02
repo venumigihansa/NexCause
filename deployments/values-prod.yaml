@@ -41,6 +41,7 @@ registry:
 
 gateway:
   enabled: true
+  consoleHostname: REPLACE_WITH_UI_HOSTNAME
   deploymentManagerHostname: REPLACE_WITH_MANAGER_HOSTNAME
   applicationWildcardHostname: "*.REPLACE_WITH_APPLICATION_DOMAIN"
   tls:
@@ -70,11 +71,19 @@ deployment-manager:
   service:
     type: ClusterIP
   config:
-    AUTH_CALLBACK_URL: https://REPLACE_WITH_MANAGER_HOSTNAME/auth/callback
+    AUTH_CALLBACK_URL: https://REPLACE_WITH_UI_HOSTNAME/auth/callback
     APP_UI_URL: https://REPLACE_WITH_UI_HOSTNAME
     AUTH_POST_LOGOUT_URL: https://REPLACE_WITH_UI_HOSTNAME
     AUTH_COOKIE_SECURE: "true"
     APP_UI_ORIGINS: https://REPLACE_WITH_UI_HOSTNAME
+
+frontend:
+  image:
+    repository: REPLACE_WITH_ECR/frontend
+    tag: REPLACE_WITH_IMMUTABLE_TAG
+    pullPolicy: IfNotPresent
+  config:
+    environment: production
 
 rca-agent:
   image:

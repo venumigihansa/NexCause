@@ -9,3 +9,7 @@
 {{- define "rca-platform.deploymentManagerServiceName" -}}
 {{- printf "%s-deployment-manager" .Release.Name -}}
 {{- end -}}
+
+{{- define "rca-platform.frontendServiceName" -}}
+{{- printf "%s-frontend" .Release.Name -}}
+{{- end -}}

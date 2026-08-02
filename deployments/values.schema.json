@@ -22,6 +22,7 @@
         "enabled",
         "name",
         "className",
+        "consoleHostname",
         "deploymentManagerHostname",
         "applicationWildcardHostname",
         "allowedRoutes",
@@ -36,6 +37,7 @@
           "maxLength": 63
         },
         "className": { "type": "string", "minLength": 1 },
+        "consoleHostname": { "type": "string" },
         "deploymentManagerHostname": { "type": "string" },
         "applicationWildcardHostname": { "type": "string" },
         "allowedRoutes": {
@@ -116,6 +118,11 @@
                 "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)+$",
                 "not": { "pattern": "REPLACE_WITH" }
               },
+              "consoleHostname": {
+                "type": "string",
+                "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)+$",
+                "not": { "pattern": "REPLACE_WITH" }
+              },
               "applicationWildcardHostname": {
                 "type": "string",
                 "pattern": "^\\*\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)+$",
@@ -153,6 +160,9 @@
               "deploymentManagerHostname": {
                 "not": { "pattern": "\\.local$" }
               },
+              "consoleHostname": {
+                "not": { "pattern": "\\.local$" }
+              },
               "applicationWildcardHostname": {
                 "not": { "pattern": "\\.local$" }
               }
@@ -161,6 +171,7 @@
         }
       ]
     },
+    "frontend": { "type": "object" },
     "postgres": { "type": "object" },
     "registry": { "type": "object" }
   }
