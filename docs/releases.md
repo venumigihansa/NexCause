@@ -15,14 +15,14 @@ the Helm chart.
 All application and chart versions must match before tagging. Verify them with:
 
 ```bash
-./scripts/verify-release-version.sh 0.1.2
+./scripts/verify-release-version.sh 0.1.3
 ```
 
 After CI passes on `main`, create the release tag:
 
 ```bash
-git tag -a v0.1.2 -m "NexCause v0.1.2"
-git push origin v0.1.2
+git tag -a v0.1.3 -m "NexCause v0.1.3"
+git push origin v0.1.3
 ```
 
 The tag workflow builds `linux/amd64` and `linux/arm64` images, publishes SBOM
@@ -41,8 +41,8 @@ Log out of GHCR, then verify anonymous access:
 
 ```bash
 docker logout ghcr.io || true
-docker pull ghcr.io/venumigihansa/nexcause-deployment-manager:0.1.2
-helm pull oci://ghcr.io/venumigihansa/charts/rca-platform --version 0.1.2
+docker pull ghcr.io/venumigihansa/nexcause-deployment-manager:0.1.3
+helm pull oci://ghcr.io/venumigihansa/charts/rca-platform --version 0.1.3
 ```
 
 Use semantic versions or immutable digests in deployments. The `latest` tag is

@@ -1,19 +1,19 @@
 dependencies:
 - name: deployment-manager
   repository: file://charts/deployment-manager
-  version: 0.1.2
+  version: 0.1.3
 - name: rca-agent
   repository: file://charts/rca-agent
-  version: 0.1.2
+  version: 0.1.3
 - name: mcp-server
   repository: file://charts/mcp-server
-  version: 0.1.2
+  version: 0.1.3
 - name: postgres
   repository: file://charts/postgres
-  version: 0.1.2
+  version: 0.1.3
 - name: registry
   repository: file://charts/registry
-  version: 0.1.2
+  version: 0.1.3
 - name: prometheus
   repository: https://prometheus-community.github.io/helm-charts
   version: 29.17.0
@@ -26,5 +26,5 @@ dependencies:
 - name: opentelemetry-collector
   repository: https://open-telemetry.github.io/opentelemetry-helm-charts
   version: 0.165.0
-digest: sha256:138e3733e264f4e75f31c41bcb4af3da374f2288aed50153b13759346b23e845
-generated: "2026-08-01T06:59:09.688069+05:30"
+digest: sha256:93ecfbea620f714f87fd76e4fb23f99e9130cb96763e1f3ea6efec45b948c0b3
+generated: "2026-08-02T13:03:12.191352+05:30"

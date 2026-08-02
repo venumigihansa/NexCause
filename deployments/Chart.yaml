@@ -2,8 +2,8 @@ apiVersion: v2
 name: rca-platform
 description: RCA Platform application and local infrastructure
 type: application
-version: 0.1.2
-appVersion: "0.1.2"
+version: 0.1.3
+appVersion: "0.1.3"
 home: https://github.com/venumigihansa/NexCause
 sources:
   - https://github.com/venumigihansa/NexCause
@@ -11,20 +11,20 @@ annotations:
   org.opencontainers.image.source: https://github.com/venumigihansa/NexCause
 dependencies:
   - name: deployment-manager
-    version: 0.1.2
+    version: 0.1.3
     repository: file://charts/deployment-manager
   - name: rca-agent
-    version: 0.1.2
+    version: 0.1.3
     repository: file://charts/rca-agent
   - name: mcp-server
-    version: 0.1.2
+    version: 0.1.3
     repository: file://charts/mcp-server
   - name: postgres
-    version: 0.1.2
+    version: 0.1.3
     repository: file://charts/postgres
     condition: postgres.enabled
   - name: registry
-    version: 0.1.2
+    version: 0.1.3
     repository: file://charts/registry
     condition: registry.enabled
   - name: prometheus

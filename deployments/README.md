@@ -31,15 +31,15 @@ ghcr.io/venumigihansa/nexcause-buildpack-runner
 oci://ghcr.io/venumigihansa/charts/rca-platform
 ```
 
-Releases are created from semantic-version tags such as `v0.1.2`. CI also
+Releases are created from semantic-version tags such as `v0.1.3`. CI also
 publishes an immutable `sha-<short-sha>` image tag. `latest` is updated only for
 stable versions, and deployment values should use a semantic version or digest.
 
 Verify a public release without registry credentials:
 
 ```bash
-docker pull ghcr.io/venumigihansa/nexcause-deployment-manager:0.1.2
-helm pull oci://ghcr.io/venumigihansa/charts/rca-platform --version 0.1.2
+docker pull ghcr.io/venumigihansa/nexcause-deployment-manager:0.1.3
+helm pull oci://ghcr.io/venumigihansa/charts/rca-platform --version 0.1.3
 ```
 
 ## Local Kind installation
@@ -50,7 +50,7 @@ from this repository:
 ```bash
 helm upgrade --install rca-platform \
   oci://ghcr.io/venumigihansa/charts/rca-platform \
-  --version 0.1.2 \
+  --version 0.1.3 \
   --namespace rca-platform \
   --create-namespace \
   -f ./deployments/values-kind.yaml \
