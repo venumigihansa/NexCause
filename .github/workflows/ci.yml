@@ -153,6 +153,7 @@ jobs:
           -f deployments/values-prod.yaml
           --set-string gateway.deploymentManagerHostname=manager.rca.example.com
           --set-string 'gateway.applicationWildcardHostname=*.apps.rca.example.com'
+          --set-string 'deployment-manager.applicationRouting.applicationWildcardHostname=*.apps.rca.example.com'
           >/dev/null
 
   docker:
