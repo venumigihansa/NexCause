@@ -1,4 +1,11 @@
-import { IsInt, IsObject, IsOptional, IsString, Min } from "class-validator";
+import {
+  IsBoolean,
+  IsInt,
+  IsObject,
+  IsOptional,
+  IsString,
+  Min,
+} from "class-validator";
 
 export class CreateDeploymentDto {
   @IsOptional()
@@ -18,6 +25,10 @@ export class CreateDeploymentDto {
   @IsInt()
   @Min(1)
   replicas?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  expose?: boolean;
 
   @IsOptional()
   @IsObject()

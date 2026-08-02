@@ -54,6 +54,13 @@ gateway:
     enabled: true
 
 deployment-manager:
+  applicationRouting:
+    enabled: true
+    gatewayName: rca-gateway
+    applicationWildcardHostname: "*.REPLACE_WITH_APPLICATION_DOMAIN"
+    namespaceLabel:
+      key: rca-platform.io/gateway-access
+      value: "true"
   image:
     repository: REPLACE_WITH_ECR/deployment-manager
     tag: REPLACE_WITH_IMMUTABLE_TAG

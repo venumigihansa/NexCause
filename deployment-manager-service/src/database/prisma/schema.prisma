@@ -223,6 +223,7 @@ model Deployment {
   kubernetesFileConfigMap String?
   kubernetesSecret      String?
   kubernetesSecretFiles String?
+  publicHostname        String?
   runtimeConfigs        RuntimeConfig[]
   evidenceSnapshots     EvidenceSnapshot[]
   healthSamples         DeploymentHealthSample[]

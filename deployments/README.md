@@ -145,6 +145,7 @@ helm upgrade --install rca-platform ./deployments \
   -f ./deployments/values-prod.yaml \
   --set-string gateway.deploymentManagerHostname=manager.rca.example.com \
   --set-string 'gateway.applicationWildcardHostname=*.apps.rca.example.com' \
+  --set-string 'deployment-manager.applicationRouting.applicationWildcardHostname=*.apps.rca.example.com' \
   --wait --timeout 10m
 ```
 
@@ -153,6 +154,27 @@ The EKS-only `GatewayParameters` configures kgateway's generated `LoadBalancer` 
 See [Gateway operations](../docs/gateway.md) for ownership, troubleshooting, and readiness checks.
 See [Authentication and tenancy operations](../docs/authentication-and-tenancy.md)
 before enabling the public Gateway.
+
+## Exposing managed applications
+
+Managed deployments remain internal ClusterIP services by default. Include
+`"expose": true` in `POST /apps/:appId/deployments` to create an HTTPS route
+and an HTTP-to-HTTPS redirect through the shared Gateway:
+
+```json
+{
+  "buildId": "<successful-build-id>",
+  "port": 8080,
+  "replicas": 1,
+  "expose": true
+}
+```
+
+The response includes `publicHostname` and `publicUrl`. Kind hostnames use the
+form `<app>-<deployment-id>.apps.rca.local`; use `curl --resolve` because local
+wildcard DNS is not created automatically. Deleting the deployment removes
+both HTTPRoutes. The Deployment Manager wildcard hostname must match
+`gateway.applicationWildcardHostname`.
 
 ## Validation
 

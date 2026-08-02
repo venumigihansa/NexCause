@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
@@ -20,6 +21,7 @@ import { KubernetesService } from "../kubernetes/kubernetes.service";
 import { KubernetesResourceNames } from "../kubernetes/types/kubernetes-resource-names";
 import { ObservabilityService } from "../observability/observability.service";
 import { CreateDeploymentDto } from "./dto/create-deployment.dto";
+import { buildPublicHostname } from "./deployment-routing";
 import { ScaleDeploymentDto } from "./dto/scale-deployment.dto";
 import { StartDeploymentDto } from "./dto/start-deployment.dto";
 
@@ -64,6 +66,9 @@ export class DeploymentsService {
       app.id,
       deploymentId,
     );
+    const routing = createDeploymentDto.expose
+      ? this.applicationRouting(app.name, deploymentId)
+      : undefined;
     const env = {
       ...normalizeEnv(createDeploymentDto.env ?? {}),
       ...this.observabilityService.buildTelemetryEnv({
@@ -105,6 +110,7 @@ export class DeploymentsService {
         kubernetesFileConfigMap: names.fileConfigMapName,
         kubernetesSecret: names.secretName,
         kubernetesSecretFiles: names.secretFileSecretName,
+        publicHostname: routing?.hostname,
         ...(runtimeConfigRecords.length > 0
           ? {
               runtimeConfigs: {
@@ -130,6 +136,7 @@ export class DeploymentsService {
         files,
         secretFiles,
         labels,
+        routing,
       });
     } catch (error) {
       await this.prisma.deployment.update({
@@ -328,15 +335,61 @@ export class DeploymentsService {
     await this.kubernetesService.deleteDeploymentResources(
       deployment.namespace,
       names,
+      Boolean(deployment.publicHostname),
     );
 
-    return this.prisma.deployment.update({
-      where: { id },
-      data: {
-        status: DeploymentStatus.deleted,
-        deletedAt: new Date(),
-      },
-    });
+    return this.prisma.deployment
+      .update({
+        where: { id },
+        data: {
+          status: DeploymentStatus.deleted,
+          deletedAt: new Date(),
+          publicHostname: null,
+        },
+      })
+      .then(sanitizeDeployment);
+  }
+
+  private applicationRouting(appName: string, deploymentId: string) {
+    const enabled =
+      this.configService.get<boolean>("applicationRoutingEnabled") ?? false;
+    const gatewayName =
+      this.configService.get<string>("applicationGatewayName") ?? "";
+    const gatewayNamespace =
+      this.configService.get<string>("applicationGatewayNamespace") ?? "";
+    const wildcardHostname =
+      this.configService.get<string>("applicationWildcardHostname") ?? "";
+    const namespaceLabelKey =
+      this.configService.get<string>("gatewayAccessNamespaceLabelKey") ?? "";
+    const namespaceLabelValue =
+      this.configService.get<string>("gatewayAccessNamespaceLabelValue") ?? "";
+
+    if (
+      !enabled ||
+      !gatewayName ||
+      !gatewayNamespace ||
+      !wildcardHostname ||
+      !namespaceLabelKey ||
+      !namespaceLabelValue
+    ) {
+      throw new ServiceUnavailableException(
+        "Public application routing is not configured",
+      );
+    }
+
+    try {
+      return {
+        hostname: buildPublicHostname(appName, deploymentId, wildcardHostname),
+        gatewayName,
+        gatewayNamespace,
+        namespaceLabelKey,
+        namespaceLabelValue,
+      };
+    } catch {
+      throw new ServiceUnavailableException(
+        "Public application routing is not configured correctly",
+      );
+    }
   }
 
   private getManagedLabels(deployment: Deployment): Record<string, string> {
@@ -504,14 +557,20 @@ function buildRuntimeConfigRecords(
 function sanitizeDeployment<
   T extends {
     runtimeConfigs?: Array<{ type: RuntimeConfigType; data: unknown }>;
+    publicHostname?: string | null;
   },
->(deployment: T): T {
+>(deployment: T): T & { publicUrl: string | null } {
+  const publicUrl = deployment.publicHostname
+    ? `https://${deployment.publicHostname}`
+    : null;
+
   if (!deployment.runtimeConfigs) {
-    return deployment;
+    return { ...deployment, publicUrl };
   }
 
   return {
     ...deployment,
+    publicUrl,
     runtimeConfigs: deployment.runtimeConfigs.map((runtimeConfig) => {
       if (runtimeConfig.type !== RuntimeConfigType.secret) {
         return runtimeConfig;
@@ -570,5 +629,7 @@ function deploymentToResourceNames(
     fileConfigMapName: deployment.kubernetesFileConfigMap ?? undefined,
     secretName: deployment.kubernetesSecret ?? undefined,
     secretFileSecretName: deployment.kubernetesSecretFiles ?? undefined,
+    httpRouteName: `${deployment.kubernetesDeployment}-route`,
+    httpRedirectRouteName: `${deployment.kubernetesDeployment}-redirect`,
   };
 }

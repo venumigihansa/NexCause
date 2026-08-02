@@ -2,6 +2,10 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import * as k8s from "@kubernetes/client-node";
 import { buildBuildJobManifest } from "./builders/build-job-manifest.builder";
 import { buildBuildpackJobManifest } from "./builders/buildpack-job-manifest.builder";
+import {
+  buildApplicationRedirectRouteManifest,
+  buildApplicationRouteManifest,
+} from "./builders/application-route-manifest.builder";
 import { buildConfigMapManifest } from "./builders/configmap-manifest.builder";
 import { buildDeploymentManifest } from "./builders/deployment-manifest.builder";
 import { buildNamespaceManifest } from "./builders/namespace-manifest.builder";
@@ -21,6 +25,15 @@ interface DeployImageInput {
   files: FileConfigMap;
   secretFiles: FileConfigMap;
   labels: Record<string, string>;
+  routing?: ApplicationRoutingInput;
+}
+
+interface ApplicationRoutingInput {
+  hostname: string;
+  gatewayName: string;
+  gatewayNamespace: string;
+  namespaceLabelKey: string;
+  namespaceLabelValue: string;
 }
 
 interface FileConfigMap {
@@ -60,6 +73,7 @@ export class KubernetesService {
   private readonly coreApi: k8s.CoreV1Api;
   private readonly appsApi: k8s.AppsV1Api;
   private readonly batchApi: k8s.BatchV1Api;
+  private readonly customObjectsApi: k8s.CustomObjectsApi;
 
   constructor() {
     const kubeConfig = new k8s.KubeConfig();
@@ -68,6 +82,7 @@ export class KubernetesService {
     this.coreApi = kubeConfig.makeApiClient(k8s.CoreV1Api);
     this.appsApi = kubeConfig.makeApiClient(k8s.AppsV1Api);
     this.batchApi = kubeConfig.makeApiClient(k8s.BatchV1Api);
+    this.customObjectsApi = kubeConfig.makeApiClient(k8s.CustomObjectsApi);
   }
 
   // Creates deterministic Kubernetes resource names for one app deployment.
@@ -86,6 +101,8 @@ export class KubernetesService {
       fileConfigMapName: `${base}-files`,
       secretName: `${base}-secret`,
       secretFileSecretName: `${base}-secret-files`,
+      httpRouteName: `${base}-route`,
+      httpRedirectRouteName: `${base}-redirect`,
     };
   }
 
@@ -134,6 +151,9 @@ export class KubernetesService {
     await this.upsertSecretFiles(input);
     await this.upsertDeployment(input);
     await this.upsertService(input);
+    if (input.routing) {
+      await this.enableApplicationRouting(input);
+    }
   }
 
   // Creates a Kubernetes Job that clones a repo, builds a Dockerfile, and pushes the image.
@@ -332,7 +352,12 @@ export class KubernetesService {
   async deleteDeploymentResources(
     namespace: string,
     names: KubernetesResourceNames,
+    deleteRoutes = false,
   ): Promise<void> {
+    if (deleteRoutes) {
+      await this.deleteHttpRoute(namespace, names.httpRedirectRouteName);
+      await this.deleteHttpRoute(namespace, names.httpRouteName);
+    }
     await this.deleteIfExists(() =>
       this.appsApi.deleteNamespacedDeployment(names.deploymentName, namespace),
     );
@@ -382,6 +407,94 @@ export class KubernetesService {
         }),
       );
     }
+  }
+
+  private async enableApplicationRouting(
+    input: DeployImageInput,
+  ): Promise<void> {
+    const routing = input.routing;
+    if (!routing) {
+      return;
+    }
+
+    await this.coreApi.patchNamespace(
+      input.namespace,
+      {
+        metadata: {
+          labels: {
+            [routing.namespaceLabelKey]: routing.namespaceLabelValue,
+          },
+        },
+      },
+      undefined,
+      undefined,
+      "deployment-manager-service",
+      undefined,
+      undefined,
+      mergePatchOptions(),
+    );
+
+    const route = buildApplicationRouteManifest({
+      name: input.names.httpRouteName,
+      namespace: input.namespace,
+      hostname: routing.hostname,
+      gatewayName: routing.gatewayName,
+      gatewayNamespace: routing.gatewayNamespace,
+      serviceName: input.names.serviceName,
+      servicePort: input.port,
+      labels: input.labels,
+    });
+    const redirectRoute = buildApplicationRedirectRouteManifest({
+      name: input.names.httpRedirectRouteName,
+      namespace: input.namespace,
+      hostname: routing.hostname,
+      gatewayName: routing.gatewayName,
+      gatewayNamespace: routing.gatewayNamespace,
+      labels: input.labels,
+    });
+
+    try {
+      await this.createHttpRoute(input.namespace, route);
+      await this.createHttpRoute(input.namespace, redirectRoute);
+    } catch (error) {
+      await this.deleteHttpRoute(
+        input.namespace,
+        input.names.httpRedirectRouteName,
+      );
+      await this.deleteHttpRoute(input.namespace, input.names.httpRouteName);
+      throw error;
+    }
+  }
+
+  private async createHttpRoute(
+    namespace: string,
+    route: Record<string, unknown>,
+  ): Promise<void> {
+    await this.customObjectsApi.createNamespacedCustomObject(
+      "gateway.networking.k8s.io",
+      "v1",
+      namespace,
+      "httproutes",
+      route,
+      undefined,
+      undefined,
+      "deployment-manager-service",
+    );
+  }
+
+  private async deleteHttpRoute(
+    namespace: string,
+    name: string,
+  ): Promise<void> {
+    await this.deleteIfExists(() =>
+      this.customObjectsApi.deleteNamespacedCustomObject(
+        "gateway.networking.k8s.io",
+        "v1",
+        namespace,
+        "httproutes",
+        name,
+      ),
+    );
   }
 
   // Creates or replaces the ConfigMap that stores non-secret env vars.

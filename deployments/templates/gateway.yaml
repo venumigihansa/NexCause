@@ -1,4 +1,19 @@
 {{- if .Values.gateway.enabled }}
+{{- $deploymentManager := index .Values "deployment-manager" -}}
+{{- if $deploymentManager.applicationRouting.enabled }}
+{{- if ne .Values.gateway.name $deploymentManager.applicationRouting.gatewayName }}
+{{- fail "deployment-manager.applicationRouting.gatewayName must match gateway.name" }}
+{{- end }}
+{{- if ne .Values.gateway.applicationWildcardHostname $deploymentManager.applicationRouting.applicationWildcardHostname }}
+{{- fail "deployment-manager.applicationRouting.applicationWildcardHostname must match gateway.applicationWildcardHostname" }}
+{{- end }}
+{{- if ne .Values.gateway.allowedRoutes.namespaceLabel.key $deploymentManager.applicationRouting.namespaceLabel.key }}
+{{- fail "deployment-manager.applicationRouting.namespaceLabel.key must match gateway.allowedRoutes.namespaceLabel.key" }}
+{{- end }}
+{{- if ne .Values.gateway.allowedRoutes.namespaceLabel.value $deploymentManager.applicationRouting.namespaceLabel.value }}
+{{- fail "deployment-manager.applicationRouting.namespaceLabel.value must match gateway.allowedRoutes.namespaceLabel.value" }}
+{{- end }}
+{{- end }}
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:

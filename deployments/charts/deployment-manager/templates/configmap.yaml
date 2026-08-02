@@ -15,6 +15,14 @@ data:
   {{- if .Values.localRegistry.enabled }}
   LOCAL_REGISTRY_CLUSTER: {{ printf "%s-registry:%v" .Release.Name .Values.localRegistry.port | quote }}
   {{- end }}
+  APPLICATION_ROUTING_ENABLED: {{ .Values.applicationRouting.enabled | quote }}
+  {{- if .Values.applicationRouting.enabled }}
+  APPLICATION_GATEWAY_NAME: {{ required "applicationRouting.gatewayName is required when application routing is enabled" .Values.applicationRouting.gatewayName | quote }}
+  APPLICATION_GATEWAY_NAMESPACE: {{ .Release.Namespace | quote }}
+  APPLICATION_WILDCARD_HOSTNAME: {{ required "applicationRouting.applicationWildcardHostname is required when application routing is enabled" .Values.applicationRouting.applicationWildcardHostname | quote }}
+  GATEWAY_ACCESS_NAMESPACE_LABEL_KEY: {{ required "applicationRouting.namespaceLabel.key is required when application routing is enabled" .Values.applicationRouting.namespaceLabel.key | quote }}
+  GATEWAY_ACCESS_NAMESPACE_LABEL_VALUE: {{ required "applicationRouting.namespaceLabel.value is required when application routing is enabled" .Values.applicationRouting.namespaceLabel.value | quote }}
+  {{- end }}
   {{- range $key, $value := .Values.config }}
   {{ $key }}: {{ $value | quote }}
   {{- end }}

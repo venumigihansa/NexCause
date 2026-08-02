@@ -5,4 +5,6 @@ export interface KubernetesResourceNames {
   fileConfigMapName?: string;
   secretName?: string;
   secretFileSecretName?: string;
+  httpRouteName: string;
+  httpRedirectRouteName: string;
 }

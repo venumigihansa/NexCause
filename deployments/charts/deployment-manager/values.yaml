@@ -22,6 +22,13 @@ sessionCleanup:
 localRegistry:
   enabled: false
   port: 5000
+applicationRouting:
+  enabled: false
+  gatewayName: rca-gateway
+  applicationWildcardHostname: ""
+  namespaceLabel:
+    key: rca-platform.io/gateway-access
+    value: "true"
 config: {}
 resources:
   requests: { cpu: 100m, memory: 256Mi }

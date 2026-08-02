@@ -48,6 +48,13 @@ registry:
     storageClass: standard
 
 deployment-manager:
+  applicationRouting:
+    enabled: true
+    gatewayName: rca-gateway
+    applicationWildcardHostname: "*.apps.rca.local"
+    namespaceLabel:
+      key: rca-platform.io/gateway-access
+      value: "true"
   localRegistry:
     enabled: true
     port: 5000
